@@ -58,25 +58,12 @@ SGX_COMMON_CFLAGS += -fstack-protector
 ######## CUSTOM Settings ########
 
 CUSTOM_LIBRARY_PATH := /sgxdcnet/lib
-CUSTOM_BIN_PATH := ./bin
 CUSTOM_EDL_PATH := ./vendor/edl
 CUSTOM_COMMON_PATH := ./vendor/common
 
-######## EDL Settings ########
-
-Enclave_EDL_Files := enclave/Enclave_t.c enclave/Enclave_t.h common/Enclave_u.c common/Enclave_u.h
-
-######## APP Settings ########
+######## Cargo Settings ########
 
 TARGET_DIR := /tmp/sgxdcnet/target/debug
-
-App_Rust_Flags :=
-App_SRC_Files := $(shell find common/ -type f -name '*.rs') $(shell find common/ -type f -name 'Cargo.toml')
-App_Include_Paths := -I ./app -I./include -I$(SGX_SDK)/include -I$(CUSTOM_EDL_PATH)
-App_C_Flags := $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes $(App_Include_Paths)
-
-App_Rust_Path := ${TARGET_DIR}
-App_Enclave_u_Object :=$(CUSTOM_LIBRARY_PATH)/libEnclave_u.a
 
 ######## Enclave Settings ########
 
@@ -98,11 +85,38 @@ Crypto_Library_Name := sgx_tcrypto
 KeyExchange_Library_Name := sgx_tkey_exchange
 ProtectedFs_Library_Name := sgx_tprotected_fs
 
+.PHONY: all
+all: untrusted enclave
+
+######## EDL Objects ########
+
+Enclave_EDL_Files := enclave/Enclave_t.c enclave/Enclave_t.h common/Enclave_u.c common/Enclave_u.h
+
+$(Enclave_EDL_Files): $(SGX_EDGER8R) enclave/Enclave.edl
+	$(SGX_EDGER8R) --trusted enclave/Enclave.edl --search-path $(SGX_SDK)/include --search-path $(CUSTOM_EDL_PATH) --trusted-dir enclave
+	$(SGX_EDGER8R) --untrusted enclave/Enclave.edl --search-path $(SGX_SDK)/include --search-path $(CUSTOM_EDL_PATH) --untrusted-dir common
+	@echo "GEN  =>  $(Enclave_EDL_Files)"
+
+######## Enclave Wrapper Objects ########
+
+common/Enclave_u.o: $(Enclave_EDL_Files)
+	@$(CC) $(SGX_COMMON_CFLAGS) -fPIC -Wno-attributes -I ./app -I./include -I$(SGX_SDK)/include -I$(CUSTOM_EDL_PATH) -c common/Enclave_u.c -o $@
+	@echo "CC   <=  $<"
+
+$(CUSTOM_LIBRARY_PATH)/libEnclave_u.a: common/Enclave_u.o
+	mkdir -p $(CUSTOM_LIBRARY_PATH)
+	$(AR) rcsD $@ $^
+
+.PHONY: untrusted
+untrusted: $(CUSTOM_LIBRARY_PATH)/libEnclave_u.a
+
+######## Enclave Objects ########
+
 RustEnclave_C_Files := $(wildcard ./enclave/*.c)
 RustEnclave_C_Objects := $(RustEnclave_C_Files:.c=.o)
 RustEnclave_Include_Paths := -I$(CUSTOM_COMMON_PATH)/inc -I$(CUSTOM_EDL_PATH) -I$(SGX_SDK)/include -I$(SGX_SDK)/include/tlibc -I$(SGX_SDK)/include/stlport -I$(SGX_SDK)/include/epid -I ./enclave -I./include
 
-RustEnclave_Link_Libs := -L$(CUSTOM_LIBRARY_PATH) -lenclave
+RustEnclave_Link_Libs := -L$(TARGET_DIR) -ldcnetenclave
 RustEnclave_Compile_Flags := $(SGX_COMMON_CFLAGS) $(ENCLAVE_CFLAGS) $(RustEnclave_Include_Paths)
 RustEnclave_Link_Flags := -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L$(SGX_LIBRARY_PATH) \
 	-Wl,--whole-archive -l$(Trts_Library_Name) -Wl,--no-whole-archive \
@@ -110,57 +124,24 @@ RustEnclave_Link_Flags := -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfi
 	-Wl,--version-script=enclave/Enclave.lds \
 	$(ENCLAVE_LDFLAGS)
 
-RustEnclave_Name := enclave/enclave.so
-Signed_RustEnclave_Name := bin/enclave.signed.so
-
-.PHONY: all
-all: $(App_Enclave_u_Object) $(Signed_RustEnclave_Name)
-
-######## EDL Objects ########
-
-$(Enclave_EDL_Files): $(SGX_EDGER8R) enclave/Enclave.edl
-	$(SGX_EDGER8R) --trusted enclave/Enclave.edl --search-path $(SGX_SDK)/include --search-path $(CUSTOM_EDL_PATH) --trusted-dir enclave
-	$(SGX_EDGER8R) --untrusted enclave/Enclave.edl --search-path $(SGX_SDK)/include --search-path $(CUSTOM_EDL_PATH) --untrusted-dir common
-	@echo "GEN  =>  $(Enclave_EDL_Files)"
-
-######## App Objects ########
-
-common/Enclave_u.o: $(Enclave_EDL_Files)
-	@$(CC) $(App_C_Flags) -c common/Enclave_u.c -o $@
-	@echo "CC   <=  $<"
-
-$(App_Enclave_u_Object): common/Enclave_u.o
-	mkdir -p $(CUSTOM_LIBRARY_PATH)
-	$(AR) rcsD $@ $^
-
-# $(App_Name): $(App_Enclave_u_Object) $(App_SRC_Files)
-# 	@cd app && SGX_SDK=$(SGX_SDK) cargo build $(App_Rust_Flags)
-# 	@echo "Cargo  =>  $@"
-# 	mkdir -p $(CUSTOM_BIN_PATH)
-# 	cp $(App_Rust_Path)/app $(CUSTOM_BIN_PATH)
-
-######## Enclave Objects ########
-
 enclave/Enclave_t.o: $(Enclave_EDL_Files)
 	@$(CC) $(RustEnclave_Compile_Flags) -c enclave/Enclave_t.c -o $@
 	@echo "CC   <=  $<"
 
-.PHONY: enclave
-enclave:
+enclave/enclave.so: enclave/Enclave_t.o
 	@cd enclave && cargo build
-	@cp ${TARGET_DIR}/libdcnetenclave.a $(CUSTOM_LIBRARY_PATH)/libenclave.a
-
-$(RustEnclave_Name): enclave enclave/Enclave_t.o
 	@$(CXX) enclave/Enclave_t.o -o $@ $(RustEnclave_Link_Flags)
 	@echo "LINK =>  $@"
 
-$(Signed_RustEnclave_Name): $(RustEnclave_Name)
-	mkdir -p bin
-	@$(SGX_ENCLAVE_SIGNER) sign -key enclave/Enclave_private.pem -enclave $(RustEnclave_Name) -out $@ -config enclave/Enclave.config.xml
+${CUSTOM_LIBRARY_PATH}/enclave.signed.so: enclave/enclave.so
+	@$(SGX_ENCLAVE_SIGNER) sign -key enclave/Enclave_private.pem -enclave enclave/enclave.so -out $@ -config enclave/Enclave.config.xml
 	@echo "SIGN =>  $@"
+
+.PHONY: enclave
+enclave: ${CUSTOM_LIBRARY_PATH}/enclave.signed.so
 
 .PHONY: clean
 clean:
 	@rm -f $(App_Name) $(RustEnclave_Name) $(Signed_RustEnclave_Name) enclave/*_t.* common/*_u.* $(CUSTOM_LIBRARY_PATH)/*.a
 	@cd enclave && cargo clean && rm -f Cargo.lock
-	@cd app && cargo clean && rm -f Cargo.lock
+	@cd common && cargo clean && rm -f Cargo.lock

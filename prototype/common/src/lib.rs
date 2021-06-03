@@ -62,7 +62,7 @@ impl Aggregator for MyAggregator {
 
         let send_request = SendRequest {
             user_id: UserId::default(),
-            message: RawMessage([9 as u8; DC_NET_MESSAGE_LENGTH]),
+            message: [9 as u8; DC_NET_MESSAGE_LENGTH],
             round: 0,
             server_keys: vec![ServerSecret::gen_test(1), ServerSecret::gen_test(2)],
         };

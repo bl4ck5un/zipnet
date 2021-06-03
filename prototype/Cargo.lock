@@ -146,6 +146,7 @@ dependencies = [
  "log",
  "pretty_env_logger",
  "prost",
+ "serde_cbor 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "sgx_serialize",
  "sgx_serialize_derive",
  "sgx_types",
@@ -175,7 +176,7 @@ dependencies = [
  "quick-error 1.2.2",
  "serde 1.0.118",
  "serde-big-array 0.3.0",
- "serde_cbor",
+ "serde_cbor 0.11.1 (git+https://github.com/mesalock-linux/cbor-sgx)",
  "sgx_rand",
  "sgx_tcrypto",
  "sgx_trts",
@@ -889,6 +890,16 @@ dependencies = [
 [[package]]
 name = "serde_cbor"
 version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e18acfa2f90e8b735b2836ab8d538de304cbb6729a7360729ea5a895d15a622"
+dependencies = [
+ "half",
+ "serde 1.0.123",
+]
+
+[[package]]
+name = "serde_cbor"
+version = "0.11.1"
 source = "git+https://github.com/mesalock-linux/cbor-sgx#64211d5d095bc0e39259de45f6e88f78d8de77fb"
 dependencies = [
  "half",
@@ -1091,6 +1102,7 @@ name = "sgxdcnet-client"
 version = "0.1.0"
 dependencies = [
  "common",
+ "interface",
  "prost",
  "tokio",
  "tonic",
