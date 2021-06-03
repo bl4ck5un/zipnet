@@ -7,7 +7,7 @@ extern crate tonic;
 pub mod enclave_wrapper;
 
 use enclave_wrapper::{DcNetEnclave, EnclaveResult};
-use interface::{SendRequest, ServerSecret, UserId, DC_NET_MESSAGE_LENGTH, RawMessage};
+use interface::{RawMessage, SendRequest, ServerSecret, UserId, DC_NET_MESSAGE_LENGTH};
 
 use tonic::{transport::Server, Request, Response, Status};
 

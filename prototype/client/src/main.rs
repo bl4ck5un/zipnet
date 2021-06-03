@@ -1,5 +1,5 @@
-extern crate interface;
 extern crate common;
+extern crate interface;
 
 use interface::*;
 
