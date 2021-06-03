@@ -31,9 +31,11 @@ byteorder = {git = "https://github.com/mesalock-linux/byteorder-sgx", optional =
 default = ["untrusted"]
 untrusted = ["serde", "serde-big-array"]
 trusted = [
-    "serde_sgx", "serde-big-array_sgx",
+    "serde_sgx",
+    "serde-big-array_sgx",
     "sgx_tstd",
-    "sgx_rand", "sgx_rand_derive",
+    "sgx_rand",
+    "sgx_rand_derive",
     "sgx_tcrypto",
     "sha2",
     "byteorder",
