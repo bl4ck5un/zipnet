@@ -12,6 +12,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Build enclave
-        run: bash --rcfile /root/.bashrc -ci "cd prototype/enclave && export PATH=.root/.cargo/bin:$PATH make"
+        run: bash -c "cd prototype/enclave && export PATH=.root/.cargo/bin:$PATH make"
       - name: Build client
-        run: bash --rcfile /root/.bashrc -ci "cd prototype/client && export PATH=.root/.cargo/bin:$PATH cargo b"
+        run: bash -c "cd prototype/client && export PATH=.root/.cargo/bin:$PATH cargo b"
