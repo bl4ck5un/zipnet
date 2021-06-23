@@ -2,7 +2,7 @@ name: Build
 on: push
 
 jobs:
-  build-enclave:
+  build-everything:
     runs-on: ubuntu-18.04
     container:
       image: baiduxlab/sgx-rust:1804-1.1.3
@@ -12,8 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Build enclave
-        run: export PATH=.root/.cargo/bin:$PATH make
+        run: PATH=/root/.cargo/bin:$PATH make
         working-directory: prototype/enclave
       - name: Build client
-        run: export PATH=.root/.cargo/bin:$PATH cargo b
+        run: PATH=/root/.cargo/bin:$PATH cargo b
         working-directory: prototype/enclave
