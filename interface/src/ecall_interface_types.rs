@@ -169,8 +169,7 @@ pub struct SignedPubKeyDb {
 #[cfg_attr(feature = "trusted", serde(crate = "serde_sgx"))]
 #[derive(Clone, Default, Serialize, Debug, Deserialize)]
 pub struct RoundOutput {
-    pub round: u32,
-    pub window: u32,
+    pub round_info: RoundInfo,
     pub dc_msg: DcRoundMessage,
     pub server_sigs: Vec<Signature>,
 }

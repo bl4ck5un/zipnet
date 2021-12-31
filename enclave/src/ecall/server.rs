@@ -119,17 +119,10 @@ pub fn unblind_aggregate(
     let sig_key = input.1.unseal_into()?;
     let shared_secrets = input.2.unseal_into()?;
 
-    if round_msg.round != shared_secrets.round_info.round {
+    if round_msg.round_info != shared_secrets.round_info {
         error!(
-            "wrong round. round_msg.round {} != shared_secrets.round {}",
-            round_msg.round, shared_secrets.round_info.round
-        );
-        return Err(SGX_ERROR_INVALID_PARAMETER);
-    }
-    if round_msg.window != shared_secrets.round_info.window {
-        error!(
-            "wrong round. round_msg.window {} != shared_secrets.window {}",
-            round_msg.window, shared_secrets.round_info.window
+            "wrong round. round_msg.round_info {:?} != shared_secrets.round_info {:?}",
+            round_msg.round_info, shared_secrets.round_info
         );
         return Err(SGX_ERROR_INVALID_PARAMETER);
     }
@@ -190,8 +183,7 @@ pub fn derive_round_output(
     // We require all s in shares should have the same aggregated_msg
     let first_msg = shares[0].unmarshal()?;
     let final_aggregation = first_msg.encrypted_msg.aggregated_msg;
-    let round = first_msg.encrypted_msg.round;
-    let window = first_msg.encrypted_msg.window;
+    let round_info = first_msg.encrypted_msg.round_info;
 
     for s in shares.iter() {
         let share = s.unmarshal()?;
@@ -206,8 +198,7 @@ pub fn derive_round_output(
     final_msg.xor_mut(&final_aggregation);
 
     let mut round_output = RoundOutput {
-        round,
-        window,
+        round_info,
         dc_msg: final_msg,
         server_sigs: vec![],
     };
@@ -218,7 +209,7 @@ pub fn derive_round_output(
 
     debug!(
         "⏰ r{}w{} concluded with output {:?}",
-        round, window, round_output
+        round_info.round, round_info.window, round_output
     );
 
     Ok(round_output)

@@ -51,8 +51,8 @@ pub fn add_to_aggregate_internal(
         // now that we know both current_aggregation and incoming_msg are not empty
         // we first validate they match
         let mut current_aggregation = current_aggregation.unmarshal()?;
-        if current_aggregation.round != incoming_msg.round {
-            error!("current_aggregation.round != incoming_msg.round");
+        if current_aggregation.round_info != incoming_msg.round_info {
+            error!("current_aggregation.round_info != incoming_msg.round_info");
             return Err(SGX_ERROR_INVALID_PARAMETER);
         }
 

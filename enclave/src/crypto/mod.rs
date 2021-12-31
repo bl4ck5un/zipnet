@@ -17,7 +17,8 @@ use std::convert::TryInto;
 impl Hashable for RoundOutput {
     fn sha256(&self) -> [u8; 32] {
         let mut h = Sha256::new();
-        h.input(&self.round.to_le_bytes());
+        h.input(&self.round_info.round.to_le_bytes());
+        h.input(&self.round_info.window.to_le_bytes());
         h.input(&self.dc_msg.digest());
 
         h.result().try_into().unwrap()

@@ -75,7 +75,7 @@ pub fn user_submit_internal(
     let (cur_slot, cur_fp, next_slot, next_fp) = derive_reservation(
         &signing_sk,
         &send_request.anytrust_group_id,
-        &send_request.round_info,
+        send_request.round_info,
     );
 
     // since the scheduling vector is potentially a lot larger than the dc net message vector (to
@@ -121,7 +121,7 @@ pub fn user_submit_internal(
         );
     } else {
         // validate the request
-        if send_request.round_info.round != send_request.prev_round_output.round + 1 {
+        if send_request.round_info != send_request.prev_round_output.round_info.incr_round() {
             error!("wrong round #");
             return Err(SGX_ERROR_INVALID_PARAMETER);
         }
@@ -201,8 +201,7 @@ pub fn user_submit_internal(
     let mut mutable = AggregatedMessage {
         user_ids: BTreeSet::from_iter(vec![send_request.user_id].into_iter()),
         anytrust_group_id: send_request.anytrust_group_id,
-        round: send_request.round_info.round,
-        window: send_request.round_info.window,
+        round_info: send_request.round_info,
         tee_sig: Default::default(),
         tee_pk: Default::default(),
         aggregated_msg: encrypted_msg,
@@ -235,7 +234,7 @@ pub fn user_submit_internal(
 fn derive_reservation(
     usk: &SgxPrivateKey,
     anytrust_group_id: &EntityId,
-    round_info: &RoundInfo,
+    round_info: RoundInfo,
 ) -> (usize, interface::Footprint, usize, interface::Footprint) {
     const FIRST_SLOT_IDX: &[u8; 14] = b"first-slot-idx";
     const FIRST_SLOT_VAL: &[u8; 14] = b"first-slot-val";
@@ -258,55 +257,34 @@ fn derive_reservation(
     let h4_to_u32 = |label: &[u8; 14],
                      usk: &SgxPrivateKey,
                      anytrust_group_id: &EntityId,
-                     round: u32,
-                     window: u32| {
+                     round_info: RoundInfo| {
         let mut h = Sha256::new();
         h.input(label);
         h.input(usk);
         h.input(anytrust_group_id);
-        h.input(round.to_le_bytes());
-        h.input(window.to_le_bytes());
+        h.input(round_info.round.to_le_bytes());
+        h.input(round_info.window.to_le_bytes());
 
         let hash = h.result().to_vec();
 
         LittleEndian::read_u32(&hash)
     };
 
-    let RoundInfo {
-        round,
-        window,
-        rounds_per_window,
-        ..
-    } = *round_info;
-    let (prev_slot_idx, prev_slot_val) = match (round, window) {
-        (0, 0) => (
+    let (prev_slot_idx, prev_slot_val) = round_info
+        .decr_round()
+        .map(|ri| {
+            (
+                h4_to_u32(SCHED_SLOT_IDX, usk, anytrust_group_id, ri) as usize,
+                h4_to_u32(SCHED_SLOT_VAL, usk, anytrust_group_id, ri),
+            )
+        })
+        .unwrap_or((
             h3_to_u32(FIRST_SLOT_IDX, usk, anytrust_group_id) as usize,
             h3_to_u32(FIRST_SLOT_VAL, usk, anytrust_group_id),
-        ),
-        (0, w) => (
-            h4_to_u32(
-                SCHED_SLOT_IDX,
-                usk,
-                anytrust_group_id,
-                rounds_per_window - 1,
-                w - 1,
-            ) as usize,
-            h4_to_u32(
-                SCHED_SLOT_VAL,
-                usk,
-                anytrust_group_id,
-                rounds_per_window - 1,
-                w - 1,
-            ),
-        ),
-        (r, w) => (
-            h4_to_u32(SCHED_SLOT_IDX, usk, anytrust_group_id, r - 1, w) as usize,
-            h4_to_u32(SCHED_SLOT_VAL, usk, anytrust_group_id, r - 1, w),
-        ),
-    };
+        ));
 
-    let next_slot_idx = h4_to_u32(SCHED_SLOT_IDX, usk, anytrust_group_id, round, window) as usize;
-    let next_slot_val = h4_to_u32(SCHED_SLOT_VAL, usk, anytrust_group_id, round, window);
+    let next_slot_idx = h4_to_u32(SCHED_SLOT_IDX, usk, anytrust_group_id, round_info) as usize;
+    let next_slot_val = h4_to_u32(SCHED_SLOT_VAL, usk, anytrust_group_id, round_info);
 
     (
         prev_slot_idx % FOOTPRINT_N_SLOTS,
