@@ -38,8 +38,7 @@ use std::cell::RefCell;
 /// group of any-trust server
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct SharedSecretsDb {
-    /// round number
-    pub round: u32,
+    pub round_info: RoundInfo,
     /// a dictionary of keys
     pub db: BTreeMap<SgxProtectedKeyPub, DiffieHellmanSharedSecret>,
 }
@@ -47,7 +46,8 @@ pub struct SharedSecretsDb {
 impl Debug for SharedSecretsDb {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("SharedSecretsDb")
-            .field("round", &self.round)
+            .field("round", &self.round_info.round)
+            .field("window", &self.round_info.window)
             .field("db", &self.db)
             .finish()
     }
@@ -89,8 +89,8 @@ impl SharedSecretsDb {
         }
 
         Ok(SharedSecretsDb {
-            round: 0,
             db: server_secrets,
+            ..Default::default()
         })
     }
 
@@ -114,7 +114,7 @@ impl SharedSecretsDb {
             .collect();
 
         SharedSecretsDb {
-            round: self.round + 1,
+            round_info: self.round_info.incr_round(),
             db: a,
         }
     }
@@ -126,7 +126,7 @@ pub type RoundSecret = DcRoundMessage;
 
 /// Derives a RoundSecret as the XOR of `HKDF(server_secrets[i], round)` for all `i` in `0`...`len(server_secrets)`
 pub fn derive_round_secret(
-    round: u32,
+    round_info: &RoundInfo,
     server_secrets: &SharedSecretsDb,
 ) -> CryptoResult<RoundSecret> {
     let mut round_secret = RoundSecret::default();
@@ -135,9 +135,11 @@ pub fn derive_round_secret(
         // For cryptographic RNG's a seed of 256 bits is recommended, [u8; 32].
         let mut seed = [0u8; 32];
 
-        // info contains round
+        // info contains round and window
         let mut info = [0; 32];
-        LittleEndian::write_u32(&mut info, round);
+        let cursor = &mut info;
+        LittleEndian::write_u32(cursor, round_info.round);
+        LittleEndian::write_u32(cursor, round_info.window);
         hk.expand(&info, &mut seed)?;
 
         let mut seed_u32 = [0u32; 8]; // Chacha PRNG in SGX SDK uses u32 as seeds

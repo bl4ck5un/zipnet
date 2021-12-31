@@ -16,6 +16,7 @@ use std::vec::Vec;
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AggregatedMessage {
     pub round: u32,
+    pub window: u32,
     pub anytrust_group_id: EntityId,
     pub user_ids: BTreeSet<EntityId>,
     pub aggregated_msg: DcRoundMessage,
@@ -27,6 +28,7 @@ impl Default for AggregatedMessage {
     fn default() -> Self {
         AggregatedMessage {
             round: 0,
+            window: 0,
             anytrust_group_id: EntityId::default(),
             user_ids: BTreeSet::new(),
             aggregated_msg: DcRoundMessage::default(),

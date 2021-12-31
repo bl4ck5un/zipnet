@@ -220,7 +220,7 @@ pub fn compute_anytrust_group_id(keys: &[SgxSigningPubKey]) -> EntityId {
 pub struct UserSubmissionReq {
     pub user_id: EntityId,
     pub anytrust_group_id: EntityId,
-    pub round: u32,
+    pub round_info: RoundInfo,
     pub msg: DcMessage,
     /// output of previous round signed by one or more anytrust server
     pub prev_round_output: RoundOutput,
@@ -235,7 +235,7 @@ pub struct UserSubmissionReq {
 pub struct UserReservationReq {
     pub user_id: EntityId,
     pub anytrust_group_id: EntityId,
-    pub round: u32,
+    pub round_info: RoundInfo,
     /// A map from server public key to sealed shared secret
     pub shared_secrets: SealedSharedSecretDb,
     /// A list of server public keys (can be verified using the included attestation)

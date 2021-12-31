@@ -4,9 +4,9 @@ use common::enclave_wrapper::DcNetEnclave;
 use serde::{Deserialize, Serialize};
 
 use interface::{
-    compute_anytrust_group_id, DcMessage, EntityId, KemPubKey, RoundOutput, RoundSubmissionBlob,
-    SealedSharedSecretDb, SealedSigPrivKey, ServerPubKeyPackage, UserRegistrationBlob,
-    UserReservationReq, UserSubmissionReq,
+    compute_anytrust_group_id, DcMessage, EntityId, KemPubKey, RoundInfo, RoundOutput,
+    RoundSubmissionBlob, SealedSharedSecretDb, SealedSigPrivKey, ServerPubKeyPackage,
+    UserRegistrationBlob, UserReservationReq, UserSubmissionReq,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -49,14 +49,14 @@ impl UserState {
     pub fn submit_round_msg(
         &mut self,
         enclave: &DcNetEnclave,
-        round: u32,
+        round_info: RoundInfo,
         msg: DcMessage,
         prev_round_output: RoundOutput,
     ) -> Result<RoundSubmissionBlob> {
         let req = UserSubmissionReq {
             user_id: self.user_id,
             anytrust_group_id: self.anytrust_group_id,
-            round,
+            round_info,
             msg,
             shared_secrets: self.shared_secrets.clone(),
             prev_round_output,
@@ -71,11 +71,17 @@ impl UserState {
         Ok(blob)
     }
 
-    pub fn reserve_slot(&self, enclave: &DcNetEnclave, round: u32) -> Result<RoundSubmissionBlob> {
+    pub fn reserve_slot(
+        &self,
+        enclave: &DcNetEnclave,
+        round_info: RoundInfo,
+    ) -> Result<RoundSubmissionBlob> {
+        let RoundInfo { round, windows, .. } = round_info;
         let req = UserReservationReq {
             user_id: self.user_id,
             anytrust_group_id: self.anytrust_group_id,
             round,
+            window,
             shared_secrets: self.shared_secrets.clone(),
             server_pks: self.anytrust_group_keys.clone(),
         };

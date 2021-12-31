@@ -143,14 +143,15 @@ impl UnsealableInto<SgxPrivateKey> for SealedKemPrivKey {
 impl SealInto<SealedSharedSecretDb> for SharedSecretsDb {
     fn seal_into(&self) -> SgxResult<SealedSharedSecretDb> {
         let mut sealed_shared_secrets = SealedSharedSecretDb::default();
-        sealed_shared_secrets.round = self.round;
+        sealed_shared_secrets.round_info = self.round_info;
 
         for (k, s) in self.db.iter() {
             // authenticate public keys and rounds in "ad"
             let mut ad = Vec::new();
             ad.extend_from_slice(&k.gx);
             ad.extend_from_slice(&k.gy);
-            ad.extend_from_slice(&self.round.to_ne_bytes());
+            ad.extend_from_slice(&self.round_info.round.to_ne_bytes());
+            ad.extend_from_slice(&self.round_info.window.to_ne_bytes());
 
             sealed_shared_secrets
                 .db
@@ -164,13 +165,14 @@ impl SealInto<SealedSharedSecretDb> for SharedSecretsDb {
 impl UnsealableInto<SharedSecretsDb> for SealedSharedSecretDb {
     fn unseal_into(&self) -> sgx_types::SgxResult<SharedSecretsDb> {
         let mut db = SharedSecretsDb::default();
-        db.round = self.round;
+        db.round_info = self.round_info;
         for (k, v) in self.db.iter() {
             // expected ad = pk || round
             let mut expected_ad = Vec::new();
             expected_ad.extend_from_slice(&k.gx);
             expected_ad.extend_from_slice(&k.gy);
-            expected_ad.extend_from_slice(&self.round.to_ne_bytes());
+            expected_ad.extend_from_slice(&self.round_info.round.to_ne_bytes());
+            expected_ad.extend_from_slice(&self.round_info.window.to_ne_bytes());
 
             let (secret, ad) = unseal_vec_and_deser(&v)?;
 

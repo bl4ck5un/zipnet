@@ -28,13 +28,20 @@ fn main() -> Result<(), UserError> {
         .takes_value(true)
         .help("A file that contains this user's previous state");
 
+    let window_arg = Arg::with_name("window")
+        .short("w")
+        .long("window")
+        .value_name("INTEGER")
+        .required(true)
+        .takes_value(true)
+        .help("The current window number of the DC net");
     let round_arg = Arg::with_name("round")
         .short("r")
         .long("round")
         .value_name("INTEGER")
         .required(true)
         .takes_value(true)
-        .help("The current round number of the DC net");
+        .help("The current round number within this window of the DC net");
 
     let matches = App::new("SGX DCNet Client")
         .version("0.1.0")
@@ -67,12 +74,14 @@ fn main() -> Result<(), UserError> {
             SubCommand::with_name("reserve-slot")
                 .about("Reserves a message slot for the next round")
                 .arg(state_arg.clone())
+                .arg(window_arg.clone())
                 .arg(round_arg.clone())
         )
         .subcommand(
             SubCommand::with_name("send-empty")
                 .about("Sends the empty message as cover traffic for the system")
                 .arg(state_arg.clone())
+                .arg(window_arg.clone())
                 .arg(round_arg.clone())
         )
         .subcommand(
@@ -83,6 +92,7 @@ fn main() -> Result<(), UserError> {
                     DC_NET_MESSAGE_LENGTH
                 ).as_str())
                 .arg(state_arg.clone())
+                .arg(window_arg.clone())
                 .arg(round_arg.clone())
                 .arg(
                     Arg::with_name("prev-round-output")
@@ -113,10 +123,14 @@ fn main() -> Result<(), UserError> {
         let dc_msg = DcMessage::default();
         let prev_round_output = RoundOutput::default();
 
-        // Load the round
-        let round = {
+        // Load the round and window
+        let (round, window) = {
             let round_str = matches.value_of("round").unwrap();
-            cli_util::parse_u32(&round_str)?
+            let window_str = matches.value_of("window").unwrap();
+            (
+                cli_util::parse_u32(&round_str)?,
+                cli_util::parse_u32(&window_str)?,
+            )
         };
 
         // Now encrypt the message and output it
@@ -143,10 +157,14 @@ fn main() -> Result<(), UserError> {
         let mut dc_msg = DcMessage::default();
         dc_msg.0[..msg.len()].copy_from_slice(&msg);
 
-        // Load the round
-        let round = {
+        // Load the round and window
+        let (round, window) = {
             let round_str = matches.value_of("round").unwrap();
-            cli_util::parse_u32(&round_str)?
+            let window_str = matches.value_of("window").unwrap();
+            (
+                cli_util::parse_u32(&round_str)?,
+                cli_util::parse_u32(&window_str)?,
+            )
         };
 
         // Load the previous round output. Load a placeholder output if round == 0
@@ -168,10 +186,14 @@ fn main() -> Result<(), UserError> {
     }
 
     if let Some(matches) = matches.subcommand_matches("reserve-slot") {
-        // Load the round
-        let round = {
+        // Load the round and window
+        let (round, window) = {
             let round_str = matches.value_of("round").unwrap();
-            cli_util::parse_u32(&round_str)?
+            let window_str = matches.value_of("window").unwrap();
+            (
+                cli_util::parse_u32(&round_str)?,
+                cli_util::parse_u32(&window_str)?,
+            )
         };
 
         // Now encrypt the message and output it
