@@ -6,7 +6,7 @@ mod util;
 
 use crate::{
     user_state::UserState,
-    util::{base64_from_stdin, load_state, save_state, save_to_stdout, UserError},
+    util::{base64_from_stdin, load_round_info, load_state, save_state, save_to_stdout, UserError},
 };
 
 use common::{cli_util, enclave_wrapper::DcNetEnclave};
@@ -123,19 +123,12 @@ fn main() -> Result<(), UserError> {
         let dc_msg = DcMessage::default();
         let prev_round_output = RoundOutput::default();
 
-        // Load the round and window
-        let (round, window) = {
-            let round_str = matches.value_of("round").unwrap();
-            let window_str = matches.value_of("window").unwrap();
-            (
-                cli_util::parse_u32(&round_str)?,
-                cli_util::parse_u32(&window_str)?,
-            )
-        };
+        // Load the round info
+        let round_info = load_round_info(&matches)?;
 
         // Now encrypt the message and output it
         let mut state = load_state(&matches)?;
-        let ciphertext = state.submit_round_msg(&enclave, round, dc_msg, prev_round_output)?;
+        let ciphertext = state.submit_round_msg(&enclave, round_info, dc_msg, prev_round_output)?;
         save_to_stdout(&ciphertext)?;
 
         // The shared secrets were ratcheted, so we have to save the new state
@@ -157,18 +150,12 @@ fn main() -> Result<(), UserError> {
         let mut dc_msg = DcMessage::default();
         dc_msg.0[..msg.len()].copy_from_slice(&msg);
 
-        // Load the round and window
-        let (round, window) = {
-            let round_str = matches.value_of("round").unwrap();
-            let window_str = matches.value_of("window").unwrap();
-            (
-                cli_util::parse_u32(&round_str)?,
-                cli_util::parse_u32(&window_str)?,
-            )
-        };
+        // Load the round info
+        let round_info = load_round_info(&matches)?;
 
-        // Load the previous round output. Load a placeholder output if round == 0
-        let prev_round_output: RoundOutput = if round > 0 {
+        // Load the previous round output. Load a placeholder output if this is the first round of
+        // the first window
+        let prev_round_output: RoundOutput = if round_info.is_zero() {
             let round_output_filename = matches.value_of("prev-round-output").unwrap();
             let round_file = File::open(round_output_filename)?;
             cli_util::load(round_file)?
@@ -178,7 +165,7 @@ fn main() -> Result<(), UserError> {
 
         // Now encrypt the message and output it
         let mut state = load_state(&matches)?;
-        let ciphertext = state.submit_round_msg(&enclave, round, dc_msg, prev_round_output)?;
+        let ciphertext = state.submit_round_msg(&enclave, round_info, dc_msg, prev_round_output)?;
         save_to_stdout(&ciphertext)?;
 
         // The shared secrets were ratcheted, so we have to save the new state
@@ -186,19 +173,12 @@ fn main() -> Result<(), UserError> {
     }
 
     if let Some(matches) = matches.subcommand_matches("reserve-slot") {
-        // Load the round and window
-        let (round, window) = {
-            let round_str = matches.value_of("round").unwrap();
-            let window_str = matches.value_of("window").unwrap();
-            (
-                cli_util::parse_u32(&round_str)?,
-                cli_util::parse_u32(&window_str)?,
-            )
-        };
+        // Load the round info
+        let round_info = load_round_info(&matches)?;
 
         // Now encrypt the message and output it
         let state = load_state(&matches)?;
-        let ciphertext = state.reserve_slot(&enclave, round)?;
+        let ciphertext = state.reserve_slot(&enclave, round_info)?;
         save_to_stdout(&ciphertext)?;
     }
 

@@ -76,12 +76,10 @@ impl UserState {
         enclave: &DcNetEnclave,
         round_info: RoundInfo,
     ) -> Result<RoundSubmissionBlob> {
-        let RoundInfo { round, windows, .. } = round_info;
         let req = UserReservationReq {
             user_id: self.user_id,
             anytrust_group_id: self.anytrust_group_id,
-            round,
-            window,
+            round_info,
             shared_secrets: self.shared_secrets.clone(),
             server_pks: self.anytrust_group_keys.clone(),
         };

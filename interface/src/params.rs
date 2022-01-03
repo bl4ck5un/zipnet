@@ -61,4 +61,9 @@ impl RoundInfo {
             }),
         }
     }
+
+    /// Return whether this is the first round of the first window
+    pub fn is_zero(&self) -> bool {
+        self.round == 0 && self.window == 0
+    }
 }
