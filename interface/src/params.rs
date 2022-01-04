@@ -33,8 +33,8 @@ pub struct RoundInfo {
 }
 
 impl RoundInfo {
-    // Increment the round counter, respecting window size
-    pub fn incr_round(&self) -> RoundInfo {
+    // Return the next round, respecting window size
+    pub fn next_round(&self) -> RoundInfo {
         let (new_round, new_window) = if self.round == DC_NET_ROUNDS_PER_WINDOW - 1 {
             (0, self.window + 1)
         } else {
@@ -47,8 +47,8 @@ impl RoundInfo {
         }
     }
 
-    // Increment the round counter, respecting window size
-    pub fn decr_round(&self) -> Option<RoundInfo> {
+    // Return the previous round, respecting window size
+    pub fn prev_round(&self) -> Option<RoundInfo> {
         match (self.round, self.window) {
             (0, 0) => None,
             (0, w) => Some(RoundInfo {

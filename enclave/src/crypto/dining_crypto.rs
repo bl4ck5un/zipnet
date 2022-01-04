@@ -114,7 +114,7 @@ impl SharedSecretsDb {
             .collect();
 
         SharedSecretsDb {
-            round_info: self.round_info.incr_round(),
+            round_info: self.round_info.next_round(),
             db: a,
         }
     }

@@ -45,7 +45,7 @@ pub fn add_to_aggregate_internal(
     // if the current aggregation is empty we create a single-msg aggregation
     if current_aggregation.0.is_empty() {
         let mut agg = incoming_msg.clone();
-        agg.sign_mut(&tee_signing_key);
+        agg.sign_mut(&tee_signing_key)?;
         return incoming_msg.marshal();
     } else {
         // now that we know both current_aggregation and incoming_msg are not empty

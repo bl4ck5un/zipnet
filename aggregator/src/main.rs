@@ -9,7 +9,7 @@ pub use crate::util::AggregatorError;
 use crate::{
     agg_state::AggregatorState,
     service::start_service,
-    util::{load_from_stdin, load_state, save_state, save_to_stdout},
+    util::{load_from_stdin, load_round_info, load_state, save_state, save_to_stdout},
 };
 
 use common::{cli_util, enclave_wrapper::DcNetEnclave};
@@ -33,13 +33,20 @@ fn main() -> Result<(), AggregatorError> {
         .takes_value(true)
         .help("A file that contains this aggregator's previous state");
 
+    let window_arg = Arg::with_name("window")
+        .short("w")
+        .long("window")
+        .value_name("INTEGER")
+        .required(true)
+        .takes_value(true)
+        .help("The current window number of the DC net");
     let round_arg = Arg::with_name("round")
         .short("r")
         .long("round")
         .value_name("INTEGER")
         .required(true)
         .takes_value(true)
-        .help("The current round number of the DC net");
+        .help("The current round number within this window of the DC net");
 
     let matches = App::new("SGX DCNet Client")
         .version("0.1.0")
@@ -72,6 +79,7 @@ fn main() -> Result<(), AggregatorError> {
             SubCommand::with_name("start-round")
                 .about("Starts a fresh aggregate for the given round number")
                 .arg(state_arg.clone())
+                .arg(window_arg.clone())
                 .arg(round_arg.clone()),
         )
         .subcommand(
@@ -91,6 +99,7 @@ fn main() -> Result<(), AggregatorError> {
                     aggregate to the aggregator or server at FORWARD_ADDR.",
                 )
                 .arg(state_arg.clone())
+                .arg(window_arg.clone())
                 .arg(round_arg.clone())
                 .arg(
                     Arg::with_name("bind")
@@ -137,16 +146,13 @@ fn main() -> Result<(), AggregatorError> {
     }
 
     if let Some(matches) = matches.subcommand_matches("start-round") {
-        // Load the round
-        let round = {
-            let round_str = matches.value_of("round").unwrap();
-            cli_util::parse_u32(&round_str)?
-        };
+        // Load the round info
+        let round_info = load_round_info(&matches)?;
 
         // Now update the state and save it
         let state_path = matches.value_of("agg-state").unwrap();
         let mut state = load_state(&state_path)?;
-        state.clear(&enclave, round)?;
+        state.clear(&enclave, round_info)?;
         save_state(&state_path, &state)?;
 
         println!("OK");
@@ -178,10 +184,7 @@ fn main() -> Result<(), AggregatorError> {
     if let Some(matches) = matches.subcommand_matches("start-service") {
         // Load the args
         let bind_addr = matches.value_of("bind").unwrap().to_string();
-        let round = {
-            let round_str = matches.value_of("round").unwrap();
-            cli_util::parse_u32(&round_str)?
-        };
+        let round_info = load_round_info(&matches)?;
         let round_dur = {
             let secs = cli_util::parse_u32(matches.value_of("round-duration").unwrap())?;
             std::time::Duration::from_secs(secs as u64)
@@ -201,14 +204,14 @@ fn main() -> Result<(), AggregatorError> {
         // Load the aggregator state and clear it for this round
         let state_path = matches.value_of("agg-state").unwrap().to_string();
         let mut agg_state = load_state(&state_path)?;
-        agg_state.clear(&enclave, round)?;
-        info!("Initialized round {}", round);
+        agg_state.clear(&enclave, round_info)?;
+        info!("Initialized r{}w{}", round_info.round, round_info.window);
 
         let state = service::ServiceState {
             agg_state,
             enclave,
             forward_urls,
-            round,
+            round_info,
         };
         start_service(bind_addr, state_path, state, round_dur).unwrap();
     }

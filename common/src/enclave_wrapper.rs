@@ -286,7 +286,7 @@ impl DcNetEnclave {
     /// Makes an empty aggregation state for the given round and wrt the given anytrust nodes
     pub fn new_aggregate(
         &self,
-        _round: u32,
+        _round_info: RoundInfo,
         _anytrust_group_id: &EntityId,
     ) -> EnclaveResult<SignedPartialAggregate> {
         // A new aggregator is simply an empty blob

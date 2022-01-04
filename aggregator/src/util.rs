@@ -2,7 +2,9 @@ use crate::agg_state::AggregatorState;
 
 use std::{fs::File, io};
 
+use clap::ArgMatches;
 use common::{cli_util, enclave_wrapper::EnclaveError};
+use interface::RoundInfo;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -23,6 +25,15 @@ pub enum AggregatorError {
 pub(crate) fn load_state(save_path: &str) -> Result<AggregatorState> {
     let save_file = File::open(save_path)?;
     Ok(cli_util::load(save_file)?)
+}
+
+pub(crate) fn load_round_info(matches: &ArgMatches) -> Result<RoundInfo> {
+    let round_str = matches.value_of("round").unwrap();
+    let window_str = matches.value_of("window").unwrap();
+    Ok(RoundInfo {
+        round: cli_util::parse_u32(&round_str)?,
+        window: cli_util::parse_u32(&window_str)?,
+    })
 }
 
 pub(crate) fn save_state(save_path: &str, state: &AggregatorState) -> Result<()> {

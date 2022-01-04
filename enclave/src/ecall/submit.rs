@@ -121,7 +121,7 @@ pub fn user_submit_internal(
         );
     } else {
         // validate the request
-        if send_request.round_info != send_request.prev_round_output.round_info.incr_round() {
+        if send_request.round_info != send_request.prev_round_output.round_info.next_round() {
             error!("wrong round #");
             return Err(SGX_ERROR_INVALID_PARAMETER);
         }
@@ -271,7 +271,7 @@ fn derive_reservation(
     };
 
     let (prev_slot_idx, prev_slot_val) = round_info
-        .decr_round()
+        .prev_round()
         .map(|ri| {
             (
                 h4_to_u32(SCHED_SLOT_IDX, usk, anytrust_group_id, ri) as usize,
