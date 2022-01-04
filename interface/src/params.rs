@@ -26,7 +26,7 @@ pub const SERVER_KEY_LENGTH: usize = DC_NET_MESSAGE_LENGTH;
 pub const SEALED_SGX_SIGNING_KEY_LENGTH: usize = 1024;
 
 #[cfg_attr(feature = "trusted", serde(crate = "serde_sgx"))]
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Serialize, Deserialize)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct RoundInfo {
     pub round: u32,
     pub window: u32,

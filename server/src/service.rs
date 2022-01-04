@@ -1,6 +1,6 @@
 use crate::{util::ServerError, ServerState};
 use common::{cli_util, enclave_wrapper::DcNetEnclave};
-use interface::{RoundOutput, RoundSubmissionBlob, UnblindedAggregateShareBlob};
+use interface::{RoundInfo, RoundOutput, RoundSubmissionBlob, UnblindedAggregateShareBlob};
 
 use core::ops::DerefMut;
 use std::{
@@ -37,8 +37,8 @@ pub(crate) struct ServiceState {
     pub(crate) enclave: DcNetEnclave,
     /// Contains the URL of the anytrust leader. If `None`, it's you.
     pub(crate) leader_url: Option<String>,
-    /// A map from round number to the round's output
-    pub(crate) round_outputs: BTreeMap<u32, RoundOutput>,
+    /// A map from round+window to the round's output
+    pub(crate) round_outputs: BTreeMap<RoundInfo, RoundOutput>,
 }
 
 impl ServiceState {
@@ -74,9 +74,12 @@ fn leader_finish_round(state: &mut ServiceState) {
     let output = server_state
         .derive_round_output(enclave, &round_shares)
         .unwrap();
-    let round = output.round;
-    round_outputs.insert(round, output);
-    info!("Output of round {} now available", round);
+    let round_info = output.round_info;
+    round_outputs.insert(round_info, output);
+    info!(
+        "Output of r{}w{} now available",
+        round_info.round, round_info.window
+    );
 
     // Clear the state and increment the round
     round_shares.clear();
@@ -199,13 +202,19 @@ async fn submit_share(
     Ok(HttpResponse::Ok().body("OK\n"))
 }
 
-/// Returns the output of the specified round
-#[get("/round-result/{round}")]
+/// Returns the output of the specified round+window
+#[get("/round-result/{window}/{round}")]
 async fn round_result(
-    (round, state): (web::Path<u32>, web::Data<Arc<Mutex<ServiceState>>>),
+    (window, round, state): (
+        web::Path<u32>,
+        web::Path<u32>,
+        web::Data<Arc<Mutex<ServiceState>>>,
+    ),
 ) -> Result<HttpResponse, ApiError> {
-    // Unwrap the round
+    // Unwrap the round+window and make it a struct
+    let web::Path(window) = window;
     let web::Path(round) = round;
+    let round_info = RoundInfo { round, window };
 
     // Unpack state
     let handle = state.get_ref().lock().unwrap();
@@ -221,7 +230,7 @@ async fn round_result(
     }
 
     // Try to get the requested output
-    let res = match round_outputs.get(&round) {
+    let res = match round_outputs.get(&round_info) {
         // If the given round's output exists in memory, return it
         Some(round_output) => {
             // Give the signed round output, not just the raw payload
@@ -240,7 +249,7 @@ async fn round_result(
         }
         // If the given round's output doesn't exist in memory, error out
         None => {
-            info!("received request for invalid round {}", round);
+            info!("received request for invalid round r{}w{}", round, window);
             HttpResponse::NotFound().body("Invalid round")
         }
     };
