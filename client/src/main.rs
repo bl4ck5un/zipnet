@@ -155,7 +155,7 @@ fn main() -> Result<(), UserError> {
 
         // Load the previous round output. Load a placeholder output if this is the first round of
         // the first window
-        let prev_round_output: RoundOutput = if round_info.is_zero() {
+        let prev_round_output: RoundOutput = if !round_info.is_zero() {
             let round_output_filename = matches.value_of("prev-round-output").unwrap();
             let round_file = File::open(round_output_filename)?;
             cli_util::load(round_file)?
