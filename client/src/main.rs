@@ -10,7 +10,7 @@ use crate::{
 };
 
 use common::{cli_util, enclave_wrapper::DcNetEnclave};
-use interface::{DcMessage, RoundOutput, ServerPubKeyPackage, DC_NET_MESSAGE_LENGTH};
+use interface::{DcMessage, RoundOutput, ServerPubKeyPackage, UserMsg, DC_NET_MESSAGE_LENGTH};
 use std::fs::File;
 
 use clap::{App, AppSettings, Arg, SubCommand};
@@ -119,16 +119,15 @@ fn main() -> Result<(), UserError> {
 
     // Send cover traffic
     if let Some(matches) = matches.subcommand_matches("send-empty") {
-        // Make an empty message. Previous round output doesn't matter.
-        let dc_msg = DcMessage::default();
-        let prev_round_output = RoundOutput::default();
+        // Make a cover traffic message
+        let msg = UserMsg::Cover;
 
         // Load the round info
         let round_info = load_round_info(&matches)?;
 
         // Now encrypt the message and output it
         let mut state = load_state(&matches)?;
-        let ciphertext = state.submit_round_msg(&enclave, round_info, dc_msg, prev_round_output)?;
+        let ciphertext = state.submit_round_msg(&enclave, round_info, msg)?;
         save_to_stdout(&ciphertext)?;
 
         // The shared secrets were ratcheted, so we have to save the new state
@@ -163,9 +162,15 @@ fn main() -> Result<(), UserError> {
             RoundOutput::default()
         };
 
+        let msg = UserMsg::TalkAndReserve {
+            msg: dc_msg,
+            prev_round_output,
+            times_talked: 0,
+        };
+
         // Now encrypt the message and output it
         let mut state = load_state(&matches)?;
-        let ciphertext = state.submit_round_msg(&enclave, round_info, dc_msg, prev_round_output)?;
+        let ciphertext = state.submit_round_msg(&enclave, round_info, msg)?;
         save_to_stdout(&ciphertext)?;
 
         // The shared secrets were ratcheted, so we have to save the new state
@@ -176,9 +181,11 @@ fn main() -> Result<(), UserError> {
         // Load the round info
         let round_info = load_round_info(&matches)?;
 
-        // Now encrypt the message and output it
-        let state = load_state(&matches)?;
-        let ciphertext = state.reserve_slot(&enclave, round_info)?;
+        let msg = UserMsg::Reserve { times_talked: 0 };
+
+        // Compute the reservation
+        let mut state = load_state(&matches)?;
+        let ciphertext = state.submit_round_msg(&enclave, round_info, msg)?;
         save_to_stdout(&ciphertext)?;
     }
 

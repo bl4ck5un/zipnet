@@ -94,12 +94,6 @@ pub extern "C" fn ecall_entrypoint(
             submit::user_submit_internal
         ),
         (
-            EcallUserReserveSlot,
-            (UserReservationReq, SealedSigPrivKey),
-            (RoundSubmissionBlob, SealedSharedSecretDb),
-            submit::user_reserve_slot
-        ),
-        (
             EcallAddToAggregate,
             (RoundSubmissionBlob, SignedPartialAggregate, SealedSigPrivKey),
             SignedPartialAggregate,
@@ -224,7 +218,11 @@ where
             e
         }
     };
-    debug!("done ecall {}. took {} us", ecall_id.as_str(), start_time.elapsed().as_micros());
+    debug!(
+        "done ecall {}. took {} us",
+        ecall_id.as_str(),
+        start_time.elapsed().as_micros()
+    );
 
     ret
 }

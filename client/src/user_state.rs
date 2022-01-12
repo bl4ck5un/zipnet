@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use interface::{
     compute_anytrust_group_id, DcMessage, EntityId, KemPubKey, RoundInfo, RoundOutput,
-    RoundSubmissionBlob, SealedSharedSecretDb, SealedSigPrivKey, ServerPubKeyPackage,
-    UserRegistrationBlob, UserReservationReq, UserSubmissionReq,
+    RoundSubmissionBlob, SealedSharedSecretDb, SealedSigPrivKey, ServerPubKeyPackage, UserMsg,
+    UserRegistrationBlob, UserSubmissionReq,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -50,8 +50,7 @@ impl UserState {
         &mut self,
         enclave: &DcNetEnclave,
         round_info: RoundInfo,
-        msg: DcMessage,
-        prev_round_output: RoundOutput,
+        msg: UserMsg,
     ) -> Result<RoundSubmissionBlob> {
         let req = UserSubmissionReq {
             user_id: self.user_id,
@@ -59,7 +58,6 @@ impl UserState {
             round_info,
             msg,
             shared_secrets: self.shared_secrets.clone(),
-            prev_round_output,
             server_pks: self.anytrust_group_keys.clone(),
         };
 
@@ -68,23 +66,6 @@ impl UserState {
         // Ratchet the secrets forward
         self.shared_secrets = ratcheted_secrets;
 
-        Ok(blob)
-    }
-
-    pub fn reserve_slot(
-        &self,
-        enclave: &DcNetEnclave,
-        round_info: RoundInfo,
-    ) -> Result<RoundSubmissionBlob> {
-        let req = UserReservationReq {
-            user_id: self.user_id,
-            anytrust_group_id: self.anytrust_group_id,
-            round_info,
-            shared_secrets: self.shared_secrets.clone(),
-            server_pks: self.anytrust_group_keys.clone(),
-        };
-
-        let blob = enclave.user_reserve_slot(&req, &self.signing_key)?;
         Ok(blob)
     }
 }

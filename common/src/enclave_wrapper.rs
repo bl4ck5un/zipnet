@@ -145,12 +145,6 @@ mod ecall_allowed {
             user_submit
         ),
         (
-            EcallUserReserveSlot,
-            (&UserReservationReq, &SealedSigPrivKey),
-            RoundSubmissionBlob,
-            user_reserve_slot
-        ),
-        (
             EcallAddToAggregate,
             (&RoundSubmissionBlob, &SignedPartialAggregate, &SealedSigPrivKey),
             SignedPartialAggregate,
@@ -267,20 +261,6 @@ impl DcNetEnclave {
             self.enclave.geteid(),
             (submission_req, sealed_usk),
         )?)
-    }
-
-    /// Constructs a round message for sending to an aggregator
-    /// SGX will
-    ///     1. Check the signature on the preivous round output against a signing key (might have to change API a bit for that)
-    ///     2. Check that the current round is prev_round+1
-    ///     3. Make a new footprint reservation for this round
-    pub fn user_reserve_slot(
-        &self,
-        submission_req: &UserReservationReq,
-        sealed_usk: &SealedSigPrivKey,
-    ) -> EnclaveResult<RoundSubmissionBlob> {
-        // TODO: user_reserve_slot is essentially the same as user_submit_round_msg. Consider merging the two.
-        ecall_allowed::user_reserve_slot(self.enclave.geteid(), (submission_req, sealed_usk))
     }
 
     /// Makes an empty aggregation state for the given round and wrt the given anytrust nodes
@@ -523,13 +503,18 @@ mod enclave_tests {
         let (user_reg_shared_secrets, user_reg_sealed_key, user_reg_uid, user_reg_proof) =
             enc.new_user(&spks).unwrap();
 
+        let msg = UserMsg::TalkAndReserve {
+            msg: DcMessage([1u8; DC_NET_MESSAGE_LENGTH]),
+            prev_round_output: RoundOutput::default(),
+            times_talked: 0,
+        };
+
         let req_1 = UserSubmissionReq {
             user_id: user_reg_uid,
             anytrust_group_id: user_reg_shared_secrets.anytrust_group_id(),
             round_info: RoundInfo::default(),
-            msg: DcMessage([1u8; DC_NET_MESSAGE_LENGTH]),
+            msg,
             shared_secrets: user_reg_shared_secrets,
-            prev_round_output: RoundOutput::default(),
             server_pks: spks,
         };
 
@@ -558,18 +543,20 @@ mod enclave_tests {
         let (user_reg_shared_secrets, user_reg_sealed_key, user_reg_uid, user_reg_proof) =
             enc.new_user(&spks).unwrap();
 
-        let req_1 = UserReservationReq {
+        let msg = UserMsg::Reserve { times_talked: 0 };
+
+        let req_1 = UserSubmissionReq {
             user_id: user_reg_uid,
             anytrust_group_id: user_reg_shared_secrets.anytrust_group_id(),
-            round_info: RoundInfo {
-                round: 1,
-                window: 0,
-            },
+            round_info: RoundInfo::default(),
+            msg,
             shared_secrets: user_reg_shared_secrets,
             server_pks: spks,
         };
 
-        let resp_1 = enc.user_reserve_slot(&req_1, &user_reg_sealed_key).unwrap();
+        let (resp_1, _) = enc
+            .user_submit_round_msg(&req_1, &user_reg_sealed_key)
+            .unwrap();
 
         enc.destroy();
     }
@@ -590,12 +577,17 @@ mod enclave_tests {
 
         log::info!("user {:?} created", user_reg_uid);
 
+        let msg1 = UserMsg::TalkAndReserve {
+            msg: DcMessage([1u8; DC_NET_MESSAGE_LENGTH]),
+            prev_round_output: RoundOutput::default(),
+            times_talked: 0,
+        };
+
         let req_1 = UserSubmissionReq {
             user_id: user_reg_uid,
             anytrust_group_id: user_reg_shared_secrets.anytrust_group_id(),
             round_info: RoundInfo::default(),
-            msg: DcMessage([1u8; DC_NET_MESSAGE_LENGTH]),
-            prev_round_output: Default::default(),
+            msg: msg1,
             shared_secrets: user_reg_shared_secrets,
             server_pks: server_pks.clone(),
         };
@@ -611,7 +603,9 @@ mod enclave_tests {
 
         log::info!("aggregator {:?} created", agg.1);
 
-        let mut empty_agg = enc.new_aggregate(0, &EntityId::default()).unwrap();
+        let mut empty_agg = enc
+            .new_aggregate(RoundInfo::default(), &EntityId::default())
+            .unwrap();
         enc.add_to_aggregate(&mut empty_agg, &resp_1, &agg.0)
             .unwrap();
 
@@ -624,12 +618,17 @@ mod enclave_tests {
 
         let user_2 = enc.new_user(&server_pks).unwrap();
 
+        let msg2 = UserMsg::TalkAndReserve {
+            msg: DcMessage([2u8; DC_NET_MESSAGE_LENGTH]),
+            prev_round_output: RoundOutput::default(),
+            times_talked: 0,
+        };
+
         let req_2 = UserSubmissionReq {
             user_id: user_2.2,
             anytrust_group_id: user_2.0.anytrust_group_id(),
             round_info: RoundInfo::default(),
-            msg: DcMessage([2u8; DC_NET_MESSAGE_LENGTH]),
-            prev_round_output: Default::default(),
+            msg: msg2,
             shared_secrets: user_2.0,
             server_pks,
         };
@@ -740,12 +739,19 @@ mod enclave_tests {
 
         log::info!("user {:?} created. pk={:?}", user.2, user_pk.pk);
 
+        let dc_msg = DcMessage([9u8; DC_NET_MESSAGE_LENGTH]);
+        let msg0 = UserMsg::TalkAndReserve {
+            msg: dc_msg,
+            prev_round_output: RoundOutput::default(),
+            times_talked: 0,
+        };
+        let mut round_info = RoundInfo::default();
+
         let req_0 = UserSubmissionReq {
             user_id: user.2,
             anytrust_group_id: user.0.anytrust_group_id(),
-            round_info: RoundInfo::default(),
-            msg: DcMessage([9u8; DC_NET_MESSAGE_LENGTH]),
-            prev_round_output: RoundOutput::default(),
+            round_info,
+            msg: msg0,
             shared_secrets: user.0,
             server_pks,
         };
@@ -758,7 +764,9 @@ mod enclave_tests {
 
         log::info!("🏁 aggregator {:?} created", aggregator.1);
 
-        let mut empty_agg = enc.new_aggregate(0, &EntityId::default()).unwrap();
+        let mut empty_agg = enc
+            .new_aggregate(RoundInfo::default(), &EntityId::default())
+            .unwrap();
         enc.add_to_aggregate(&mut empty_agg, &resp_0, &aggregator.0)
             .unwrap();
 
@@ -797,9 +805,13 @@ mod enclave_tests {
             .unwrap();
         info!("✅ round_output {:?}", round_output_r0);
 
+        let msg1 = UserMsg::TalkAndReserve {
+            msg: dc_msg,
+            prev_round_output: round_output_r0,
+            times_talked: 1,
+        };
         let mut req_r1 = req_0.clone();
-        req_r1.round_info.round = 1;
-        req_r1.prev_round_output = round_output_r0;
+        req_r1.msg = msg1;
 
         info!("🏁 starting round 1");
         let (resp_1, _) = enc.user_submit_round_msg(&req_r1, &user.1).unwrap();

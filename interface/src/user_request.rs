@@ -3,7 +3,10 @@ use std::prelude::v1::*;
 
 use crate::{ecall_interface_types::*, params::*, sgx_protected_keys::*};
 
-use sha2::{Digest, Sha256};
+use sha2::{
+    digest::{generic_array::GenericArray, FixedOutputDirty},
+    Digest, Sha256,
+};
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
 big_array! { BigArray; }
@@ -215,28 +218,49 @@ pub fn compute_anytrust_group_id(keys: &[SgxSigningPubKey]) -> EntityId {
     compute_group_id(&keys.iter().map(|k| EntityId::from(k)).collect())
 }
 
+/// This is a token that's intended to be used for rate limiting. It's just the hash of the current
+/// window along with the number of times the user has already talked this window. This number may
+/// not exceed DC_NET_MSGS_PER_WINDOW. If a token ever repeats then the aggregator will know that
+/// the user is disobeying its talking limit.
+#[derive(Clone, PartialEq, Eq)]
+pub struct RateLimitNonce(GenericArray<u8, <Sha256 as FixedOutputDirty>::OutputSize>);
+
+/// In a single round a user can either talk+reserve, reserve, or do nothing (i.e., provide cover
+/// traffic).
+#[cfg_attr(feature = "trusted", serde(crate = "serde_sgx"))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum UserMsg {
+    TalkAndReserve {
+        msg: DcMessage,
+        /// Output of previous round signed by one or more anytrust server
+        prev_round_output: RoundOutput,
+        /// The number of times the user has already spoken this window
+        times_talked: u32,
+    },
+    Reserve {
+        /// The number of times the user has already spoken this window
+        times_talked: u32,
+    },
+    Cover,
+}
+
+impl UserMsg {
+    pub fn is_cover(&self) -> bool {
+        match self {
+            UserMsg::Cover => true,
+            _ => false,
+        }
+    }
+}
+
 #[cfg_attr(feature = "trusted", serde(crate = "serde_sgx"))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UserSubmissionReq {
     pub user_id: EntityId,
     pub anytrust_group_id: EntityId,
     pub round_info: RoundInfo,
-    pub msg: DcMessage,
-    /// output of previous round signed by one or more anytrust server
-    pub prev_round_output: RoundOutput,
+    pub msg: UserMsg,
     /// A map from server KEM public key to sealed shared secret
-    pub shared_secrets: SealedSharedSecretDb,
-    /// A list of server public keys (can be verified using the included attestation)
-    pub server_pks: Vec<ServerPubKeyPackage>,
-}
-
-#[cfg_attr(feature = "trusted", serde(crate = "serde_sgx"))]
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct UserReservationReq {
-    pub user_id: EntityId,
-    pub anytrust_group_id: EntityId,
-    pub round_info: RoundInfo,
-    /// A map from server public key to sealed shared secret
     pub shared_secrets: SealedSharedSecretDb,
     /// A list of server public keys (can be verified using the included attestation)
     pub server_pks: Vec<ServerPubKeyPackage>,
