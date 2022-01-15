@@ -268,6 +268,7 @@ encrypt_msgs() {
                   --user-state "../$STATE" \
                   --round $ROUND \
                   --window $WINDOW \
+                  --times-talked $ROUND \
                   --prev-round-output $PREV_ROUND_OUTPUT
         )
 

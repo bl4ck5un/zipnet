@@ -152,7 +152,7 @@ pub fn derive_round_nonce(
     h.input(round_info.window.to_le_bytes());
     h.input(times_talked.to_le_bytes());
 
-    Ok(RateLimitNonce::from_bytes(&h.result()))
+    Ok(dbg!(RateLimitNonce::from_bytes(&h.result())))
 }
 
 /// A RoundSecret is an one-time pad for a given round derived from a set of
