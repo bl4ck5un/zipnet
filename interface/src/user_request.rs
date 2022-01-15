@@ -3,10 +3,7 @@ use std::prelude::v1::*;
 
 use crate::{ecall_interface_types::*, params::*, sgx_protected_keys::*};
 
-use sha2::{
-    digest::{generic_array::GenericArray, FixedOutputDirty},
-    Digest, Sha256,
-};
+use sha2::{Digest, Sha256};
 use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
 big_array! { BigArray; }
@@ -218,12 +215,30 @@ pub fn compute_anytrust_group_id(keys: &[SgxSigningPubKey]) -> EntityId {
     compute_group_id(&keys.iter().map(|k| EntityId::from(k)).collect())
 }
 
-/// This is a token that's intended to be used for rate limiting. It's just the hash of the current
-/// window along with the number of times the user has already talked this window. This number may
-/// not exceed DC_NET_MSGS_PER_WINDOW. If a token ever repeats then the aggregator will know that
-/// the user is disobeying its talking limit.
-#[derive(Clone, PartialEq, Eq)]
-pub struct RateLimitNonce(GenericArray<u8, <Sha256 as FixedOutputDirty>::OutputSize>);
+/// This is a token that's intended to be used for rate limiting. It's just the sha256 hash of the
+/// current window along with the number of times the user has already talked this window. This
+/// number may not exceed DC_NET_MSGS_PER_WINDOW. If a token ever repeats then the aggregator will
+/// know that the user is disobeying its talking limit.
+#[cfg_attr(feature = "trusted", serde(crate = "serde_sgx"))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct RateLimitNonce([u8; 32]);
+
+impl RateLimitNonce {
+    pub fn from_bytes(bytes: &[u8]) -> RateLimitNonce {
+        let mut buf = [0u8; 32];
+        buf.copy_from_slice(bytes);
+        RateLimitNonce(buf)
+    }
+}
+
+#[cfg(feature = "trusted")]
+impl Rand for RateLimitNonce {
+    fn rand<R: Rng>(rng: &mut R) -> RateLimitNonce {
+        let mut nonce = RateLimitNonce::default();
+        rng.fill_bytes(&mut nonce.0);
+        nonce
+    }
+}
 
 /// In a single round a user can either talk+reserve, reserve, or do nothing (i.e., provide cover
 /// traffic).

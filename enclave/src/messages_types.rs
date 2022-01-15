@@ -2,8 +2,8 @@ use crypto::RoundSecret;
 use crypto::SgxSigningKey;
 use crypto::{SignMutable, Signable};
 use interface::{
-    DcMessage, DcRoundMessage, EntityId, RoundInfo, SgxSignature, SgxSigningPubKey, DC_NET_N_SLOTS,
-    FOOTPRINT_BIT_SIZE,
+    DcMessage, DcRoundMessage, EntityId, RateLimitNonce, RoundInfo, SgxSignature, SgxSigningPubKey,
+    DC_NET_N_SLOTS, FOOTPRINT_BIT_SIZE,
 };
 use sgx_tcrypto::SgxRsaPubKey;
 use sgx_types::SgxError;
@@ -18,6 +18,8 @@ pub struct AggregatedMessage {
     pub round_info: RoundInfo,
     pub anytrust_group_id: EntityId,
     pub user_ids: BTreeSet<EntityId>,
+    /// This is only Some for user-submitted messages
+    pub rate_limit_nonce: Option<RateLimitNonce>,
     pub aggregated_msg: DcRoundMessage,
     pub tee_sig: SgxSignature,
     pub tee_pk: SgxSigningPubKey,

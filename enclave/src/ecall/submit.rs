@@ -27,13 +27,13 @@ use unseal::SealInto;
 
 fn check_reservation(
     server_sig_pks: &[SgxProtectedKeyPub],
-    round_info: RoundInfo,
+    round_info: &RoundInfo,
     prev_round_output: &RoundOutput,
     cur_slot: usize,
     cur_fp: u32,
 ) -> SgxResult<()> {
     // validate the request
-    if round_info != prev_round_output.round_info.next_round() {
+    if *round_info != prev_round_output.round_info.next_round() {
         error!("wrong round #");
         return Err(SGX_ERROR_INVALID_PARAMETER);
     }
@@ -111,7 +111,7 @@ fn derive_msg_slot(cur_slot: usize, prev_round_output: &RoundOutput) -> SgxResul
 fn derive_reservation(
     usk: &SgxPrivateKey,
     anytrust_group_id: &EntityId,
-    round_info: RoundInfo,
+    round_info: &RoundInfo,
 ) -> (usize, interface::Footprint, usize, interface::Footprint) {
     const FIRST_SLOT_IDX: &[u8; 14] = b"first-slot-idx";
     const FIRST_SLOT_VAL: &[u8; 14] = b"first-slot-val";
@@ -134,7 +134,7 @@ fn derive_reservation(
     let h4_to_u32 = |label: &[u8; 14],
                      usk: &SgxPrivateKey,
                      anytrust_group_id: &EntityId,
-                     round_info: RoundInfo| {
+                     round_info: &RoundInfo| {
         let mut h = Sha256::new();
         h.input(label);
         h.input(usk);
@@ -151,8 +151,8 @@ fn derive_reservation(
         .prev_round()
         .map(|ri| {
             (
-                h4_to_u32(SCHED_SLOT_IDX, usk, anytrust_group_id, ri) as usize,
-                h4_to_u32(SCHED_SLOT_VAL, usk, anytrust_group_id, ri),
+                h4_to_u32(SCHED_SLOT_IDX, usk, anytrust_group_id, &ri) as usize,
+                h4_to_u32(SCHED_SLOT_VAL, usk, anytrust_group_id, &ri),
             )
         })
         .unwrap_or((
@@ -176,23 +176,28 @@ fn derive_reservation(
 pub fn user_submit_internal(
     (send_request, signing_sk): &(UserSubmissionReq, SealedSigPrivKey),
 ) -> SgxResult<(RoundSubmissionBlob, SealedSharedSecretDb)> {
+    let UserSubmissionReq {
+        user_id,
+        anytrust_group_id,
+        round_info,
+        msg,
+        shared_secrets,
+        server_pks,
+    } = send_request;
+
     // unseal user's sk
     let signing_sk = signing_sk.unseal_into()?;
     // check user signing key matches user_id
-    if EntityId::from(&SgxSigningPubKey::try_from(&signing_sk)?) != send_request.user_id {
+    if EntityId::from(&SgxSigningPubKey::try_from(&signing_sk)?) != *user_id {
         error!("user id mismatch");
         return Err(SGX_ERROR_INVALID_PARAMETER);
     }
 
-    let uid = &send_request.user_id;
+    let uid = &user_id;
     debug!("✅ user id {} matches user signing key", uid);
 
     // check server pks against TEE attestation
-    if !send_request
-        .server_pks
-        .iter()
-        .all(|pk| pk.verify_attestation())
-    {
+    if !server_pks.iter().all(|pk| pk.verify_attestation()) {
         error!("some PKs not verified");
         return Err(SGX_ERROR_INVALID_PARAMETER);
     }
@@ -200,48 +205,49 @@ pub fn user_submit_internal(
     let mut server_sig_pks = Vec::new();
     let mut server_kem_pks = Vec::new();
     // check anytrust group id matches server pubkeys
-    for pk_pkg in send_request.server_pks.iter() {
+    for pk_pkg in server_pks.iter() {
         server_sig_pks.push(pk_pkg.sig);
         server_kem_pks.push(pk_pkg.kem);
     }
 
     // check anytrust_group_id against the (now verified) kem keys
-    if send_request.anytrust_group_id != compute_anytrust_group_id(&server_kem_pks) {
+    if *anytrust_group_id != compute_anytrust_group_id(&server_kem_pks) {
         error!("reserve_req.anytrust_group_id != EntityId::from(server_sig_pks)");
         return Err(SGX_ERROR_INVALID_PARAMETER);
     }
 
     debug!("✅ shared secrets matches anytrust groupid");
 
+    // Derive the pseudorandom rate-limiting nonce
+    let rate_limit_nonce =
+        crypto::derive_round_nonce(anytrust_group_id, round_info, &signing_sk, msg)?;
+
     // Get the last footprint and make a new one. If this message is cover traffic, this info won't
     // be used at all.
-    let (cur_slot, cur_fp, next_slot, next_fp) = derive_reservation(
-        &signing_sk,
-        &send_request.anytrust_group_id,
-        send_request.round_info,
-    );
+    let (cur_slot, cur_fp, next_slot, next_fp) =
+        derive_reservation(&signing_sk, anytrust_group_id, round_info);
 
     // If this user is talking and it's not the first round, check the reservation. Otherwise don't
     if let UserMsg::TalkAndReserve {
         ref prev_round_output,
         ..
-    } = send_request.msg
+    } = msg
     {
         let msg_slot = derive_msg_slot(cur_slot, prev_round_output)?;
-        if send_request.round_info.round > 0 || send_request.round_info.window > 0 {
+        if round_info.round > 0 || round_info.window > 0 {
             debug!("✅ user {} will try to send in slot {}", uid, msg_slot);
 
             check_reservation(
                 &server_sig_pks,
-                send_request.round_info,
-                &prev_round_output,
+                round_info,
+                prev_round_output,
                 cur_slot,
                 cur_fp,
             )?;
 
             debug!(
                 "✅ user {} is permitted to send msg at slot {} for r{}w{}",
-                uid, msg_slot, send_request.round_info.round, send_request.round_info.window
+                uid, msg_slot, round_info.round, round_info.window
             );
         } else {
             debug!(
@@ -253,7 +259,7 @@ pub fn user_submit_internal(
         debug!("✅ user {} is not talking this round", uid);
     }
 
-    if !send_request.msg.is_cover() {
+    if !msg.is_cover() {
         debug!(
             "✅ user is scheduled for slot {} for next round with fp {}",
             next_slot, next_fp,
@@ -262,7 +268,7 @@ pub fn user_submit_internal(
 
     // Write to the round message. It's all zeros by default
     let mut round_msg = DcRoundMessage::default();
-    match send_request.msg {
+    match msg {
         // If the user is talking and reserving, write to message and reservation slots
         UserMsg::TalkAndReserve {
             msg,
@@ -273,7 +279,7 @@ pub fn user_submit_internal(
             debug!("✅ slot {} will include msg {:?}", msg_slot, msg,);
 
             round_msg.scheduling_msg[next_slot] = next_fp;
-            round_msg.aggregated_msg[msg_slot] = msg;
+            round_msg.aggregated_msg[msg_slot] = *msg;
         }
         // If the user is just reserving, write to reservation slots
         UserMsg::Reserve { .. } => {
@@ -286,22 +292,22 @@ pub fn user_submit_internal(
     // Now we encrypt the round message
 
     // Derive the round key from shared secrets
-    let shared_secrets = send_request.shared_secrets.unseal_into()?;
-    if shared_secrets.round_info != send_request.round_info {
+    let shared_secrets = shared_secrets.unseal_into()?;
+    if shared_secrets.round_info != *round_info {
         error!(
             "shared_secrets.round_info {:?} != send_request.round {:?}",
-            shared_secrets.round_info, send_request.round_info,
+            shared_secrets.round_info, round_info,
         );
         return Err(SGX_ERROR_INVALID_PARAMETER);
     }
-    if shared_secrets.anytrust_group_id() != send_request.anytrust_group_id {
+    if shared_secrets.anytrust_group_id() != *anytrust_group_id {
         error!("shared_secrets.anytrust_group_id() != send_request.anytrust_group_id");
         return Err(SGX_ERROR_INVALID_PARAMETER);
     }
 
     // debug!("round msg: {:?}", round_msg);
 
-    let round_key = match crypto::derive_round_secret(&send_request.round_info, &shared_secrets) {
+    let round_key = match crypto::derive_round_secret(round_info, &shared_secrets) {
         Ok(k) => k,
         Err(e) => {
             error!("can't derive round secret {}", e);
@@ -314,9 +320,10 @@ pub fn user_submit_internal(
 
     // Construct the output blob
     let mut agg_msg = AggregatedMessage {
-        user_ids: BTreeSet::from_iter(vec![send_request.user_id].into_iter()),
-        anytrust_group_id: send_request.anytrust_group_id,
-        round_info: send_request.round_info,
+        user_ids: BTreeSet::from_iter(vec![*user_id].into_iter()),
+        anytrust_group_id: *anytrust_group_id,
+        round_info: *round_info,
+        rate_limit_nonce: Some(rate_limit_nonce),
         tee_sig: Default::default(),
         tee_pk: Default::default(),
         aggregated_msg: encrypted_msg,
