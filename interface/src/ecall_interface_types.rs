@@ -1,7 +1,7 @@
 use crate::sgx_protected_keys::{AttestedPublicKey, ServerPubKeyPackage, SgxProtectedKeyPub};
 use crate::sgx_signature::Signature;
 use crate::user_request::EntityId;
-use crate::{DcRoundMessage, RoundInfo};
+use crate::DcRoundMessage;
 use std::collections::BTreeMap;
 use std::fmt::{Debug, Formatter};
 use std::vec::Vec;
@@ -118,7 +118,7 @@ pub struct SealedFootprintTicket(pub Vec<u8>);
 #[cfg_attr(feature = "trusted", serde(crate = "serde_sgx"))]
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct SealedSharedSecretDb {
-    pub round_info: RoundInfo,
+    pub round: u32,
     pub db: BTreeMap<SgxProtectedKeyPub, Vec<u8>>,
 }
 
@@ -167,7 +167,7 @@ pub struct SignedPubKeyDb {
 #[cfg_attr(feature = "trusted", serde(crate = "serde_sgx"))]
 #[derive(Clone, Default, Serialize, Debug, Deserialize)]
 pub struct RoundOutput {
-    pub round_info: RoundInfo,
+    pub round: u32,
     pub dc_msg: DcRoundMessage,
     pub server_sigs: Vec<Signature>,
 }

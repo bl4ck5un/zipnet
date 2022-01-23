@@ -38,7 +38,7 @@ use std::cell::RefCell;
 /// group of any-trust server
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct SharedSecretsDb {
-    pub round_info: RoundInfo,
+    pub round: u32,
     /// a dictionary of keys
     pub db: BTreeMap<SgxProtectedKeyPub, DiffieHellmanSharedSecret>,
 }
@@ -46,8 +46,7 @@ pub struct SharedSecretsDb {
 impl Debug for SharedSecretsDb {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         f.debug_struct("SharedSecretsDb")
-            .field("round", &self.round_info.round)
-            .field("window", &self.round_info.window)
+            .field("round", &self.round)
             .field("db", &self.db)
             .finish()
     }
@@ -114,7 +113,7 @@ impl SharedSecretsDb {
             .collect();
 
         SharedSecretsDb {
-            round_info: self.round_info.next_round(),
+            round: self.round + 1,
             db: a,
         }
     }
@@ -125,7 +124,7 @@ impl SharedSecretsDb {
 /// times talked.
 pub fn derive_round_nonce(
     anytrust_group_id: &EntityId,
-    round_info: &RoundInfo,
+    round: u32,
     signing_sk: &SgxPrivateKey,
     msg: &UserMsg,
 ) -> SgxResult<RateLimitNonce> {
@@ -144,15 +143,17 @@ pub fn derive_round_nonce(
         return Err(sgx_status_t::SGX_ERROR_SERVICE_UNAVAILABLE);
     }
 
+    let window = round_window(round);
+
     // Now deterministically make the nonce. nonce = H(sk, group_id, window, times_talked)
     let mut h = Sha256::new();
     h.input(b"rate-limit-nonce");
     h.input(anytrust_group_id);
     h.input(signing_sk);
-    h.input(round_info.window.to_le_bytes());
+    h.input(window.to_le_bytes());
     h.input(times_talked.to_le_bytes());
 
-    Ok(dbg!(RateLimitNonce::from_bytes(&h.result())))
+    Ok(RateLimitNonce::from_bytes(&h.result()))
 }
 
 /// A RoundSecret is an one-time pad for a given round derived from a set of
@@ -161,7 +162,7 @@ pub type RoundSecret = DcRoundMessage;
 
 /// Derives a RoundSecret as the XOR of `HKDF(server_secrets[i], round)` for all `i` in `0`...`len(server_secrets)`
 pub fn derive_round_secret(
-    round_info: &RoundInfo,
+    round: u32,
     server_secrets: &SharedSecretsDb,
 ) -> CryptoResult<RoundSecret> {
     let mut round_secret = RoundSecret::default();
@@ -173,8 +174,7 @@ pub fn derive_round_secret(
         // info contains round and window
         let mut info = [0; 32];
         let cursor = &mut info;
-        LittleEndian::write_u32(cursor, round_info.round);
-        LittleEndian::write_u32(cursor, round_info.window);
+        LittleEndian::write_u32(cursor, round);
         hk.expand(&info, &mut seed)?;
 
         let mut seed_u32 = [0u32; 8]; // Chacha PRNG in SGX SDK uses u32 as seeds

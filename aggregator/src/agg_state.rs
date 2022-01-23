@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 
 use common::enclave_wrapper::DcNetEnclave;
 use interface::{
-    compute_group_id, AggRegistrationBlob, EntityId, RoundInfo, RoundSubmissionBlob,
-    SealedSigPrivKey, ServerPubKeyPackage, SignedPartialAggregate,
+    compute_group_id, AggRegistrationBlob, EntityId, RoundSubmissionBlob, SealedSigPrivKey,
+    ServerPubKeyPackage, SignedPartialAggregate,
 };
 use serde::{Deserialize, Serialize};
 
@@ -44,9 +44,9 @@ impl AggregatorState {
     }
 
     /// Clears whatever aggregate exists and makes an empty one for the given round
-    pub(crate) fn clear(&mut self, enclave: &DcNetEnclave, round_info: RoundInfo) -> Result<()> {
+    pub(crate) fn clear(&mut self, enclave: &DcNetEnclave, round: u32) -> Result<()> {
         // Make a new partial aggregate and put it in the local state
-        let partial_agg = enclave.new_aggregate(round_info, &self.anytrust_group_id)?;
+        let partial_agg = enclave.new_aggregate(round, &self.anytrust_group_id)?;
         self.partial_agg = Some(partial_agg);
 
         Ok(())

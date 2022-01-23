@@ -201,19 +201,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         save_to_stdout(&round_output)?;
 
         // Log the raw round result in base64
-        let round_info = round_output.round_info;
+        let round = round_output.round;
         let round_msg = &round_output
             .dc_msg
             .aggregated_msg
             .iter()
             .flat_map(|msg| msg.0.to_vec())
             .collect::<Vec<u8>>();
-        info!(
-            "r{}w{} output: {}",
-            round_info.round,
-            round_info.window,
-            base64::encode(round_msg)
-        );
+        info!("round {} output: {}", round, base64::encode(round_msg));
     }
 
     if let Some(matches) = matches.subcommand_matches("start-service") {

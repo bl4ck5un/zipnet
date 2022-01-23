@@ -27,13 +27,13 @@ use unseal::SealInto;
 
 fn check_reservation(
     server_sig_pks: &[SgxProtectedKeyPub],
-    round_info: &RoundInfo,
+    round: u32,
     prev_round_output: &RoundOutput,
     cur_slot: usize,
     cur_fp: u32,
 ) -> SgxResult<()> {
     // validate the request
-    if *round_info != prev_round_output.round_info.next_round() {
+    if round != prev_round_output.round + 1 {
         error!("wrong round #");
         return Err(SGX_ERROR_INVALID_PARAMETER);
     }
@@ -51,10 +51,9 @@ fn check_reservation(
     // now that sigs on prev_round_output are checked we check the footprints therein
     if prev_round_output.dc_msg.scheduling_msg[cur_slot] != cur_fp {
         error!(
-            "❌ Collision in slot {} for r{}w{}. sent fp {} != received fp {}. ",
+            "❌ Collision in slot {} for round {}. sent fp {} != received fp {}. ",
             cur_slot,
-            prev_round_output.round_info.round,
-            prev_round_output.round_info.window,
+            prev_round_output.round,
             prev_round_output.dc_msg.scheduling_msg[cur_slot],
             cur_fp,
         );
@@ -101,8 +100,8 @@ fn derive_msg_slot(cur_slot: usize, prev_round_output: &RoundOutput) -> SgxResul
 ///         Let prev_slot_idx = H("first-slot-idx", usk, anytrust_group_id)
 ///         Let prev_slot_val = H("first-slot-val", usk, anytrust_group_id)
 /// else:
-/// 		Let prev_slot_idx = H("sched-slot-idx", usk, anytrust_group_id, round-1)
-/// 		Let prev_slot_val = H("sched-slot-val", usk, anytrust_group_id, round-1)
+///         Let prev_slot_idx = H("sched-slot-idx", usk, anytrust_group_id, round-1)
+///         Let prev_slot_val = H("sched-slot-val", usk, anytrust_group_id, round-1)
 /// Let next_slot_idx = H("sched-slot-idx", usk, anytrust_group_id, round)
 /// Let next_slot_val = H("sched-slot-val", usk, anytrust_group_id, round)
 ///
@@ -111,7 +110,7 @@ fn derive_msg_slot(cur_slot: usize, prev_round_output: &RoundOutput) -> SgxResul
 fn derive_reservation(
     usk: &SgxPrivateKey,
     anytrust_group_id: &EntityId,
-    round_info: &RoundInfo,
+    round: u32,
 ) -> (usize, interface::Footprint, usize, interface::Footprint) {
     const FIRST_SLOT_IDX: &[u8; 14] = b"first-slot-idx";
     const FIRST_SLOT_VAL: &[u8; 14] = b"first-slot-val";
@@ -131,28 +130,25 @@ fn derive_reservation(
     };
 
     // hash three things to u32
-    let h4_to_u32 = |label: &[u8; 14],
-                     usk: &SgxPrivateKey,
-                     anytrust_group_id: &EntityId,
-                     round_info: &RoundInfo| {
-        let mut h = Sha256::new();
-        h.input(label);
-        h.input(usk);
-        h.input(anytrust_group_id);
-        h.input(round_info.round.to_le_bytes());
-        h.input(round_info.window.to_le_bytes());
+    let h4_to_u32 =
+        |label: &[u8; 14], usk: &SgxPrivateKey, anytrust_group_id: &EntityId, round: u32| {
+            let mut h = Sha256::new();
+            h.input(label);
+            h.input(usk);
+            h.input(anytrust_group_id);
+            h.input(round.to_le_bytes());
 
-        let hash = h.result().to_vec();
+            let hash = h.result().to_vec();
 
-        LittleEndian::read_u32(&hash)
-    };
+            LittleEndian::read_u32(&hash)
+        };
 
-    let (prev_slot_idx, prev_slot_val) = round_info
-        .prev_round()
-        .map(|ri| {
+    let (prev_slot_idx, prev_slot_val) = round
+        .checked_sub(1)
+        .map(|r| {
             (
-                h4_to_u32(SCHED_SLOT_IDX, usk, anytrust_group_id, &ri) as usize,
-                h4_to_u32(SCHED_SLOT_VAL, usk, anytrust_group_id, &ri),
+                h4_to_u32(SCHED_SLOT_IDX, usk, anytrust_group_id, r) as usize,
+                h4_to_u32(SCHED_SLOT_VAL, usk, anytrust_group_id, r),
             )
         })
         .unwrap_or((
@@ -160,8 +156,8 @@ fn derive_reservation(
             h3_to_u32(FIRST_SLOT_VAL, usk, anytrust_group_id),
         ));
 
-    let next_slot_idx = h4_to_u32(SCHED_SLOT_IDX, usk, anytrust_group_id, round_info) as usize;
-    let next_slot_val = h4_to_u32(SCHED_SLOT_VAL, usk, anytrust_group_id, round_info);
+    let next_slot_idx = h4_to_u32(SCHED_SLOT_IDX, usk, anytrust_group_id, round) as usize;
+    let next_slot_val = h4_to_u32(SCHED_SLOT_VAL, usk, anytrust_group_id, round);
 
     (
         prev_slot_idx % FOOTPRINT_N_SLOTS,
@@ -179,11 +175,12 @@ pub fn user_submit_internal(
     let UserSubmissionReq {
         user_id,
         anytrust_group_id,
-        round_info,
+        round,
         msg,
         shared_secrets,
         server_pks,
     } = send_request;
+    let round = *round;
 
     // unseal user's sk
     let signing_sk = signing_sk.unseal_into()?;
@@ -219,13 +216,12 @@ pub fn user_submit_internal(
     debug!("✅ shared secrets matches anytrust groupid");
 
     // Derive the pseudorandom rate-limiting nonce
-    let rate_limit_nonce =
-        crypto::derive_round_nonce(anytrust_group_id, round_info, &signing_sk, msg)?;
+    let rate_limit_nonce = crypto::derive_round_nonce(anytrust_group_id, round, &signing_sk, msg)?;
 
     // Get the last footprint and make a new one. If this message is cover traffic, this info won't
     // be used at all.
     let (cur_slot, cur_fp, next_slot, next_fp) =
-        derive_reservation(&signing_sk, anytrust_group_id, round_info);
+        derive_reservation(&signing_sk, anytrust_group_id, round);
 
     // If this user is talking and it's not the first round, check the reservation. Otherwise don't
     if let UserMsg::TalkAndReserve {
@@ -234,20 +230,14 @@ pub fn user_submit_internal(
     } = msg
     {
         let msg_slot = derive_msg_slot(cur_slot, prev_round_output)?;
-        if round_info.round > 0 || round_info.window > 0 {
+        if round > 0 {
             debug!("✅ user {} will try to send in slot {}", uid, msg_slot);
 
-            check_reservation(
-                &server_sig_pks,
-                round_info,
-                prev_round_output,
-                cur_slot,
-                cur_fp,
-            )?;
+            check_reservation(&server_sig_pks, round, prev_round_output, cur_slot, cur_fp)?;
 
             debug!(
-                "✅ user {} is permitted to send msg at slot {} for r{}w{}",
-                uid, msg_slot, round_info.round, round_info.window
+                "✅ user {} is permitted to send msg at slot {} for round {}",
+                uid, msg_slot, round
             );
         } else {
             debug!(
@@ -293,10 +283,10 @@ pub fn user_submit_internal(
 
     // Derive the round key from shared secrets
     let shared_secrets = shared_secrets.unseal_into()?;
-    if shared_secrets.round_info != *round_info {
+    if shared_secrets.round != round {
         error!(
-            "shared_secrets.round_info {:?} != send_request.round {:?}",
-            shared_secrets.round_info, round_info,
+            "shared_secrets.round {} != send_request.round {}",
+            shared_secrets.round, round
         );
         return Err(SGX_ERROR_INVALID_PARAMETER);
     }
@@ -307,7 +297,7 @@ pub fn user_submit_internal(
 
     // debug!("round msg: {:?}", round_msg);
 
-    let round_key = match crypto::derive_round_secret(round_info, &shared_secrets) {
+    let round_key = match crypto::derive_round_secret(round, &shared_secrets) {
         Ok(k) => k,
         Err(e) => {
             error!("can't derive round secret {}", e);
@@ -322,7 +312,7 @@ pub fn user_submit_internal(
     let mut agg_msg = AggregatedMessage {
         user_ids: BTreeSet::from_iter(vec![*user_id].into_iter()),
         anytrust_group_id: *anytrust_group_id,
-        round_info: *round_info,
+        round,
         rate_limit_nonce: Some(rate_limit_nonce),
         tee_sig: Default::default(),
         tee_pk: Default::default(),

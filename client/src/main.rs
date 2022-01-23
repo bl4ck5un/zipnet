@@ -6,7 +6,7 @@ mod util;
 
 use crate::{
     user_state::UserState,
-    util::{base64_from_stdin, load_round_info, load_state, save_state, save_to_stdout, UserError},
+    util::{base64_from_stdin, load_state, save_state, save_to_stdout, UserError},
 };
 
 use common::{cli_util, enclave_wrapper::DcNetEnclave};
@@ -35,20 +35,13 @@ fn main() -> Result<(), UserError> {
         .takes_value(true)
         .help("The number of times this user has sent a message or reserved a slot during this window");
 
-    let window_arg = Arg::with_name("window")
-        .short("w")
-        .long("window")
-        .value_name("INTEGER")
-        .required(true)
-        .takes_value(true)
-        .help("The current window number of the DC net");
     let round_arg = Arg::with_name("round")
         .short("r")
         .long("round")
         .value_name("INTEGER")
         .required(true)
         .takes_value(true)
-        .help("The current round number within this window of the DC net");
+        .help("The current round number of the DC net");
 
     let matches = App::new("SGX DCNet Client")
         .version("0.1.0")
@@ -81,7 +74,6 @@ fn main() -> Result<(), UserError> {
             SubCommand::with_name("reserve-slot")
                 .about("Reserves a message slot for the next round")
                 .arg(state_arg.clone())
-                .arg(window_arg.clone())
                 .arg(round_arg.clone())
                 .arg(times_talked_arg.clone())
         )
@@ -89,7 +81,6 @@ fn main() -> Result<(), UserError> {
             SubCommand::with_name("send-empty")
                 .about("Sends the empty message as cover traffic for the system")
                 .arg(state_arg.clone())
-                .arg(window_arg.clone())
                 .arg(round_arg.clone())
         )
         .subcommand(
@@ -100,7 +91,6 @@ fn main() -> Result<(), UserError> {
                     DC_NET_MESSAGE_LENGTH
                 ).as_str())
                 .arg(state_arg.clone())
-                .arg(window_arg.clone())
                 .arg(round_arg.clone())
                 .arg(times_talked_arg.clone())
                 .arg(
@@ -131,12 +121,12 @@ fn main() -> Result<(), UserError> {
         // Make a cover traffic message
         let msg = UserMsg::Cover;
 
-        // Load the round info
-        let round_info = load_round_info(&matches)?;
+        // Load the round
+        let round = cli_util::parse_u32(matches.value_of("round").unwrap())?;
 
         // Now encrypt the message and output it
         let mut state = load_state(&matches)?;
-        let ciphertext = state.submit_round_msg(&enclave, round_info, msg)?;
+        let ciphertext = state.submit_round_msg(&enclave, round, msg)?;
         save_to_stdout(&ciphertext)?;
 
         // The shared secrets were ratcheted, so we have to save the new state
@@ -158,13 +148,13 @@ fn main() -> Result<(), UserError> {
         let mut dc_msg = DcMessage::default();
         dc_msg.0[..msg.len()].copy_from_slice(&msg);
 
-        // Load the round info and times talked
-        let round_info = load_round_info(&matches)?;
+        // Load the round
+        let round = cli_util::parse_u32(matches.value_of("round").unwrap())?;
         let times_talked = cli_util::parse_u32(matches.value_of("times-talked").unwrap())?;
 
         // Load the previous round output. Load a placeholder output if this is the first round of
         // the first window
-        let prev_round_output: RoundOutput = if !round_info.is_zero() {
+        let prev_round_output: RoundOutput = if round > 0 {
             let round_output_filename = matches.value_of("prev-round-output").unwrap();
             let round_file = File::open(round_output_filename)?;
             cli_util::load(round_file)?
@@ -180,7 +170,7 @@ fn main() -> Result<(), UserError> {
 
         // Now encrypt the message and output it
         let mut state = load_state(&matches)?;
-        let ciphertext = state.submit_round_msg(&enclave, round_info, msg)?;
+        let ciphertext = state.submit_round_msg(&enclave, round, msg)?;
         save_to_stdout(&ciphertext)?;
 
         // The shared secrets were ratcheted, so we have to save the new state
@@ -188,15 +178,15 @@ fn main() -> Result<(), UserError> {
     }
 
     if let Some(matches) = matches.subcommand_matches("reserve-slot") {
-        // Load the round info and times talked
-        let round_info = load_round_info(&matches)?;
+        // Load the round
+        let round = cli_util::parse_u32(matches.value_of("round").unwrap())?;
         let times_talked = cli_util::parse_u32(matches.value_of("times-talked").unwrap())?;
 
         let msg = UserMsg::Reserve { times_talked };
 
         // Compute the reservation
         let mut state = load_state(&matches)?;
-        let ciphertext = state.submit_round_msg(&enclave, round_info, msg)?;
+        let ciphertext = state.submit_round_msg(&enclave, round, msg)?;
         save_to_stdout(&ciphertext)?;
     }
 

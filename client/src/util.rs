@@ -7,7 +7,6 @@ use std::{
 
 use clap::ArgMatches;
 use common::{cli_util, enclave_wrapper::EnclaveError};
-use interface::RoundInfo;
 use serde::Serialize;
 use thiserror::Error;
 
@@ -33,15 +32,6 @@ pub(crate) fn save_state(matches: &ArgMatches, state: &UserState) -> Result<()> 
     let save_filename = matches.value_of("user-state").unwrap();
     let save_file = File::create(save_filename)?;
     Ok(cli_util::save(save_file, state)?)
-}
-
-pub(crate) fn load_round_info(matches: &ArgMatches) -> Result<RoundInfo> {
-    let round_str = matches.value_of("round").unwrap();
-    let window_str = matches.value_of("window").unwrap();
-    Ok(RoundInfo {
-        round: cli_util::parse_u32(&round_str)?,
-        window: cli_util::parse_u32(&window_str)?,
-    })
 }
 
 pub(crate) fn save_to_stdout<S: Serialize>(val: &S) -> Result<()> {

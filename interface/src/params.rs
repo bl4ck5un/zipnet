@@ -25,45 +25,10 @@ pub const SERVER_KEY_LENGTH: usize = DC_NET_MESSAGE_LENGTH;
 /// quite large and we can't go much smaller than 1024.
 pub const SEALED_SGX_SIGNING_KEY_LENGTH: usize = 1024;
 
-#[cfg_attr(feature = "trusted", serde(crate = "serde_sgx"))]
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Default, Ord, PartialOrd, Serialize, Deserialize)]
-pub struct RoundInfo {
-    pub round: u32,
-    pub window: u32,
-}
-
-impl RoundInfo {
-    // Return the next round, respecting window size
-    pub fn next_round(&self) -> RoundInfo {
-        let (new_round, new_window) = if self.round == DC_NET_ROUNDS_PER_WINDOW - 1 {
-            (0, self.window + 1)
-        } else {
-            (self.round + 1, self.window)
-        };
-
-        RoundInfo {
-            round: new_round,
-            window: new_window,
-        }
-    }
-
-    // Return the previous round, respecting window size
-    pub fn prev_round(&self) -> Option<RoundInfo> {
-        match (self.round, self.window) {
-            (0, 0) => None,
-            (0, w) => Some(RoundInfo {
-                round: DC_NET_ROUNDS_PER_WINDOW - 1,
-                window: w - 1,
-            }),
-            (r, w) => Some(RoundInfo {
-                round: r - 1,
-                window: w,
-            }),
-        }
-    }
-
-    /// Return whether this is the first round of the first window
-    pub fn is_zero(&self) -> bool {
-        self.round == 0 && self.window == 0
-    }
+/// Gets the window that this round belongs to
+pub fn round_window(round: u32) -> u32 {
+    let relative_round = round % DC_NET_ROUNDS_PER_WINDOW;
+    (round - relative_round)
+        .checked_div(DC_NET_ROUNDS_PER_WINDOW)
+        .unwrap()
 }

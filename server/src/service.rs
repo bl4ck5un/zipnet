@@ -1,6 +1,6 @@
 use crate::{util::ServerError, ServerState};
 use common::{cli_util, enclave_wrapper::DcNetEnclave};
-use interface::{RoundInfo, RoundOutput, RoundSubmissionBlob, UnblindedAggregateShareBlob};
+use interface::{RoundOutput, RoundSubmissionBlob, UnblindedAggregateShareBlob};
 
 use core::ops::DerefMut;
 use std::{
@@ -38,7 +38,7 @@ pub(crate) struct ServiceState {
     /// Contains the URL of the anytrust leader. If `None`, it's you.
     pub(crate) leader_url: Option<String>,
     /// A map from round+window to the round's output
-    pub(crate) round_outputs: BTreeMap<RoundInfo, RoundOutput>,
+    pub(crate) round_outputs: BTreeMap<u32, RoundOutput>,
 }
 
 impl ServiceState {
@@ -74,12 +74,9 @@ fn leader_finish_round(state: &mut ServiceState) {
     let output = server_state
         .derive_round_output(enclave, &round_shares)
         .unwrap();
-    let round_info = output.round_info;
-    round_outputs.insert(round_info, output);
-    info!(
-        "Output of r{}w{} now available",
-        round_info.round, round_info.window
-    );
+    let round = output.round;
+    round_outputs.insert(round, output);
+    info!("Output of round {} now available", round);
 
     // Clear the state and increment the round
     round_shares.clear();
@@ -203,7 +200,7 @@ async fn submit_share(
 }
 
 /// Returns the output of the specified round+window
-#[get("/round-result/{window}/{round}")]
+#[get("/round-result/{round}")]
 async fn round_result(
     (window, round, state): (
         web::Path<u32>,
@@ -212,9 +209,7 @@ async fn round_result(
     ),
 ) -> Result<HttpResponse, ApiError> {
     // Unwrap the round+window and make it a struct
-    let web::Path(window) = window;
     let web::Path(round) = round;
-    let round_info = RoundInfo { round, window };
 
     // Unpack state
     let handle = state.get_ref().lock().unwrap();
@@ -230,7 +225,7 @@ async fn round_result(
     }
 
     // Try to get the requested output
-    let res = match round_outputs.get(&round_info) {
+    let res = match round_outputs.get(&round) {
         // If the given round's output exists in memory, return it
         Some(round_output) => {
             // Give the signed round output, not just the raw payload

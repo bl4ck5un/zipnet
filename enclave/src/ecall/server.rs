@@ -119,14 +119,14 @@ pub fn unblind_aggregate(
     let sig_key = input.1.unseal_into()?;
     let shared_secrets = input.2.unseal_into()?;
 
-    if round_msg.round_info != shared_secrets.round_info {
+    if round_msg.round != shared_secrets.round {
         error!(
-            "wrong round. round_msg.round_info {:?} != shared_secrets.round_info {:?}",
-            round_msg.round_info, shared_secrets.round_info
+            "wrong round. round_msg.round {} != shared_secrets.round {}",
+            round_msg.round, shared_secrets.round
         );
         return Err(SGX_ERROR_INVALID_PARAMETER);
     }
-    let round_info = shared_secrets.round_info;
+    let round = shared_secrets.round;
 
     let user_ids_in_secret_db = BTreeSet::from_iter(shared_secrets.db.keys().map(EntityId::from));
     if !(round_msg.user_ids == user_ids_in_secret_db
@@ -138,7 +138,7 @@ pub fn unblind_aggregate(
         return Err(SGX_ERROR_INVALID_PARAMETER);
     }
 
-    let round_secret = derive_round_secret(&round_info, &shared_secrets).map_err(|_| {
+    let round_secret = derive_round_secret(round, &shared_secrets).map_err(|_| {
         error!("crypto error");
         SGX_ERROR_INVALID_PARAMETER
     })?;
@@ -183,7 +183,7 @@ pub fn derive_round_output(
     // We require all s in shares should have the same aggregated_msg
     let first_msg = shares[0].unmarshal()?;
     let final_aggregation = first_msg.encrypted_msg.aggregated_msg;
-    let round_info = first_msg.encrypted_msg.round_info;
+    let round = first_msg.encrypted_msg.round;
 
     for s in shares.iter() {
         let share = s.unmarshal()?;
@@ -198,7 +198,7 @@ pub fn derive_round_output(
     final_msg.xor_mut(&final_aggregation);
 
     let mut round_output = RoundOutput {
-        round_info,
+        round,
         dc_msg: final_msg,
         server_sigs: vec![],
     };
@@ -208,8 +208,8 @@ pub fn derive_round_output(
     round_output.server_sigs.push(Signature { pk, sig });
 
     debug!(
-        "⏰ r{}w{} concluded with output {:?}",
-        round_info.round, round_info.window, round_output
+        "⏰ round {} concluded with output {:?}",
+        round, round_output
     );
 
     Ok(round_output)

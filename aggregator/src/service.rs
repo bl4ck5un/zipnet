@@ -3,7 +3,7 @@ use crate::{
     AggregatorState,
 };
 use common::{cli_util, enclave_wrapper::DcNetEnclave};
-use interface::{RoundInfo, RoundSubmissionBlob};
+use interface::RoundSubmissionBlob;
 
 use core::ops::DerefMut;
 use std::{
@@ -36,7 +36,7 @@ pub(crate) struct ServiceState {
     pub(crate) agg_state: AggregatorState,
     pub(crate) enclave: DcNetEnclave,
     pub(crate) forward_urls: Vec<String>,
-    pub(crate) round_info: RoundInfo,
+    pub(crate) round: u32,
 }
 
 /// Receives a partial aggregate from an aggregator or a user
@@ -117,10 +117,10 @@ async fn round_finalization_loop(
                 ref mut agg_state,
                 ref enclave,
                 ref forward_urls,
-                ref mut round_info,
+                ref mut round,
             } = *handle;
 
-            info!("r{}w{} complete", round_info.round, round_info.window);
+            info!("round {} complete", round);
 
             info!("Forwarding aggregate to {:?}", forward_urls);
             for forward_url in forward_urls {
@@ -131,9 +131,9 @@ async fn round_finalization_loop(
             info!("Saving state");
             save_state(&state_path, agg_state).expect("failed to save state");
 
-            *round_info = round_info.next_round();
+            *round += 1;
             agg_state
-                .clear(&enclave, *round_info)
+                .clear(&enclave, *round)
                 .expect("could not start new round");
         }
     }

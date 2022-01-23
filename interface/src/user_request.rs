@@ -273,7 +273,7 @@ impl UserMsg {
 pub struct UserSubmissionReq {
     pub user_id: EntityId,
     pub anytrust_group_id: EntityId,
-    pub round_info: RoundInfo,
+    pub round: u32,
     pub msg: UserMsg,
     /// A map from server KEM public key to sealed shared secret
     pub shared_secrets: SealedSharedSecretDb,

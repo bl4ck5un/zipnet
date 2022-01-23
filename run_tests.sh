@@ -27,7 +27,6 @@ NUM_AGGREGATORS=1
 NUM_USERS_PER_AGGREGATOR=2
 
 NUM_TEST_ROUNDS=3
-WINDOW=0
 
 # We define four messages, separated by semicolons. The leading ; is because we index by 1
 MSGS_STR=";testing;hello;world;yo"
@@ -225,10 +224,10 @@ start_round() {
     # Start the base aggregators
     for i in $(seq 1 $NUM_AGGREGATORS); do
         STATE="${AGG_STATE%.txt}$i.txt"
-        $CMD_PREFIX start-round --agg-state "../$STATE" --round $ROUND --window $WINDOW
+        $CMD_PREFIX start-round --agg-state "../$STATE" --round $ROUND
     done
     # Start the root aggregator
-    $CMD_PREFIX start-round --agg-state "../$AGG_ROOTSTATE" --round $ROUND --window $WINDOW
+    $CMD_PREFIX start-round --agg-state "../$AGG_ROOTSTATE" --round $ROUND
 
     cd ..
 }
@@ -267,7 +266,6 @@ encrypt_msgs() {
             | $CMD_PREFIX encrypt-msg \
                   --user-state "../$STATE" \
                   --round $ROUND \
-                  --window $WINDOW \
                   --times-talked $ROUND \
                   --prev-round-output $PREV_ROUND_OUTPUT
         )

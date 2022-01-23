@@ -4,9 +4,8 @@ use common::enclave_wrapper::DcNetEnclave;
 use serde::{Deserialize, Serialize};
 
 use interface::{
-    compute_anytrust_group_id, EntityId, KemPubKey, RoundInfo, RoundSubmissionBlob,
-    SealedSharedSecretDb, SealedSigPrivKey, ServerPubKeyPackage, UserMsg, UserRegistrationBlob,
-    UserSubmissionReq,
+    compute_anytrust_group_id, EntityId, KemPubKey, RoundSubmissionBlob, SealedSharedSecretDb,
+    SealedSigPrivKey, ServerPubKeyPackage, UserMsg, UserRegistrationBlob, UserSubmissionReq,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -49,13 +48,13 @@ impl UserState {
     pub fn submit_round_msg(
         &mut self,
         enclave: &DcNetEnclave,
-        round_info: RoundInfo,
+        round: u32,
         msg: UserMsg,
     ) -> Result<RoundSubmissionBlob> {
         let req = UserSubmissionReq {
             user_id: self.user_id,
             anytrust_group_id: self.anytrust_group_id,
-            round_info,
+            round,
             msg,
             shared_secrets: self.shared_secrets.clone(),
             server_pks: self.anytrust_group_keys.clone(),

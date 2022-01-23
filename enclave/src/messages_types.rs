@@ -2,7 +2,7 @@ use crypto::RoundSecret;
 use crypto::SgxSigningKey;
 use crypto::{SignMutable, Signable};
 use interface::{
-    DcMessage, DcRoundMessage, EntityId, RateLimitNonce, RoundInfo, SgxSignature, SgxSigningPubKey,
+    DcMessage, DcRoundMessage, EntityId, RateLimitNonce, SgxSignature, SgxSigningPubKey,
     DC_NET_N_SLOTS, FOOTPRINT_BIT_SIZE,
 };
 use sgx_tcrypto::SgxRsaPubKey;
@@ -15,7 +15,7 @@ use std::vec::Vec;
 /// A (potentially aggregated) message that's produced by an enclave
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct AggregatedMessage {
-    pub round_info: RoundInfo,
+    pub round: u32,
     pub anytrust_group_id: EntityId,
     pub user_ids: BTreeSet<EntityId>,
     /// This is only Some for user-submitted messages

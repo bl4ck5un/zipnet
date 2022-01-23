@@ -266,7 +266,7 @@ impl DcNetEnclave {
     /// Makes an empty aggregation state for the given round and wrt the given anytrust nodes
     pub fn new_aggregate(
         &self,
-        _round_info: RoundInfo,
+        _round: u32,
         _anytrust_group_id: &EntityId,
     ) -> EnclaveResult<SignedPartialAggregate> {
         // A new aggregator is simply an empty blob
@@ -457,8 +457,8 @@ mod enclave_tests {
     use env_logger::{Builder, Env};
     use hex::FromHex;
     use interface::{
-        DcMessage, EntityId, RoundInfo, SealedFootprintTicket, SgxProtectedKeyPub,
-        UserSubmissionReq, DC_NET_MESSAGE_LENGTH, SEALED_SGX_SIGNING_KEY_LENGTH, USER_ID_LENGTH,
+        DcMessage, EntityId, SealedFootprintTicket, SgxProtectedKeyPub, UserSubmissionReq,
+        DC_NET_MESSAGE_LENGTH, SEALED_SGX_SIGNING_KEY_LENGTH, USER_ID_LENGTH,
     };
     use log::*;
     use sgx_types::SGX_ECP256_KEY_SIZE;
@@ -512,7 +512,7 @@ mod enclave_tests {
         let req_1 = UserSubmissionReq {
             user_id: user_reg_uid,
             anytrust_group_id: user_reg_shared_secrets.anytrust_group_id(),
-            round_info: RoundInfo::default(),
+            round: 0,
             msg,
             shared_secrets: user_reg_shared_secrets,
             server_pks: spks,
@@ -524,7 +524,7 @@ mod enclave_tests {
 
         // if we set round to 1, this should fail because the previous round output is empty
         let mut req_round_1 = req_1.clone();
-        req_round_1.round_info.round = 1;
+        req_round_1.round = 1;
 
         assert!(enc
             .user_submit_round_msg(&req_round_1, &user_reg_sealed_key)
@@ -548,7 +548,7 @@ mod enclave_tests {
         let req_1 = UserSubmissionReq {
             user_id: user_reg_uid,
             anytrust_group_id: user_reg_shared_secrets.anytrust_group_id(),
-            round_info: RoundInfo::default(),
+            round: 0,
             msg,
             shared_secrets: user_reg_shared_secrets,
             server_pks: spks,
@@ -586,7 +586,7 @@ mod enclave_tests {
         let req_1 = UserSubmissionReq {
             user_id: user_reg_uid,
             anytrust_group_id: user_reg_shared_secrets.anytrust_group_id(),
-            round_info: RoundInfo::default(),
+            round: 0,
             msg: msg1,
             shared_secrets: user_reg_shared_secrets,
             server_pks: server_pks.clone(),
@@ -603,9 +603,7 @@ mod enclave_tests {
 
         log::info!("aggregator {:?} created", agg.1);
 
-        let mut empty_agg = enc
-            .new_aggregate(RoundInfo::default(), &EntityId::default())
-            .unwrap();
+        let mut empty_agg = enc.new_aggregate(0, &EntityId::default()).unwrap();
         enc.add_to_aggregate(&mut empty_agg, &resp_1, &agg.0)
             .unwrap();
 
@@ -627,7 +625,7 @@ mod enclave_tests {
         let req_2 = UserSubmissionReq {
             user_id: user_2.2,
             anytrust_group_id: user_2.0.anytrust_group_id(),
-            round_info: RoundInfo::default(),
+            round: 0,
             msg: msg2,
             shared_secrets: user_2.0,
             server_pks,
@@ -745,12 +743,11 @@ mod enclave_tests {
             prev_round_output: RoundOutput::default(),
             times_talked: 0,
         };
-        let mut round_info = RoundInfo::default();
 
         let req_0 = UserSubmissionReq {
             user_id: user.2,
             anytrust_group_id: user.0.anytrust_group_id(),
-            round_info,
+            round: 0,
             msg: msg0,
             shared_secrets: user.0,
             server_pks,
@@ -764,9 +761,7 @@ mod enclave_tests {
 
         log::info!("🏁 aggregator {:?} created", aggregator.1);
 
-        let mut empty_agg = enc
-            .new_aggregate(RoundInfo::default(), &EntityId::default())
-            .unwrap();
+        let mut empty_agg = enc.new_aggregate(0, &EntityId::default()).unwrap();
         enc.add_to_aggregate(&mut empty_agg, &resp_0, &aggregator.0)
             .unwrap();
 
