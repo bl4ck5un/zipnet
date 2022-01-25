@@ -4,6 +4,7 @@ use sgx_urts;
 use sgx_status_t::SGX_SUCCESS;
 use sgx_types::*;
 use sgx_urts::SgxEnclave;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use interface::*;
@@ -112,6 +113,8 @@ mod ecall_allowed {
     use interface::*;
     use EcallId::*;
 
+    use std::collections::BTreeSet;
+
     match_ecall_ids! {
         (
             EcallNewSgxKeypair,
@@ -146,8 +149,13 @@ mod ecall_allowed {
         ),
         (
             EcallAddToAggregate,
-            (&RoundSubmissionBlob, &SignedPartialAggregate, &SealedSigPrivKey),
-            SignedPartialAggregate,
+            (
+                &RoundSubmissionBlob,
+                &SignedPartialAggregate,
+                &Option<BTreeSet<RateLimitNonce>>,
+                &SealedSigPrivKey
+            ),
+            (SignedPartialAggregate, Option<BTreeSet<RateLimitNonce>>),
             add_to_agg
         ),
         (
@@ -279,14 +287,19 @@ impl DcNetEnclave {
     pub fn add_to_aggregate(
         &self,
         agg: &mut SignedPartialAggregate,
+        observed_nonces: &mut Option<BTreeSet<RateLimitNonce>>,
         new_input: &RoundSubmissionBlob,
         signing_key: &SealedSigPrivKey,
     ) -> EnclaveResult<()> {
-        let new_agg =
-            ecall_allowed::add_to_agg(self.enclave.geteid(), (new_input, agg, signing_key))?;
+        let (new_agg, new_observed_nonces) = ecall_allowed::add_to_agg(
+            self.enclave.geteid(),
+            (new_input, agg, observed_nonces, signing_key),
+        )?;
 
+        // Update the agg and nonces
         agg.0.clear();
         agg.0.extend_from_slice(&new_agg.0);
+        *observed_nonces = new_observed_nonces;
 
         Ok(())
     }
@@ -462,7 +475,7 @@ mod enclave_tests {
     };
     use log::*;
     use sgx_types::SGX_ECP256_KEY_SIZE;
-    use std::vec;
+    use std::{collections::BTreeSet, vec};
 
     fn init_logger() {
         let env = Env::default()
@@ -604,12 +617,13 @@ mod enclave_tests {
         log::info!("aggregator {:?} created", agg.1);
 
         let mut empty_agg = enc.new_aggregate(0, &EntityId::default()).unwrap();
-        enc.add_to_aggregate(&mut empty_agg, &resp_1, &agg.0)
+        let mut observed_nonces = Some(BTreeSet::new());
+        enc.add_to_aggregate(&mut empty_agg, &mut observed_nonces, &resp_1, &agg.0)
             .unwrap();
 
         // this should error because user is already in
         assert!(enc
-            .add_to_aggregate(&mut empty_agg, &resp_1, &agg.0)
+            .add_to_aggregate(&mut empty_agg, &mut observed_nonces, &resp_1, &agg.0)
             .is_err());
 
         log::info!("error expected");
@@ -632,8 +646,11 @@ mod enclave_tests {
         };
         let (resp_2, _) = enc.user_submit_round_msg(&req_2, &user_2.1).unwrap();
 
-        enc.add_to_aggregate(&mut empty_agg, &resp_2, &agg.0)
+        enc.add_to_aggregate(&mut empty_agg, &mut observed_nonces, &resp_2, &agg.0)
             .unwrap();
+
+        // Ensure we saw two distinct nonces
+        assert_eq!(observed_nonces.unwrap().len(), 2);
 
         enc.destroy();
     }
@@ -762,7 +779,8 @@ mod enclave_tests {
         log::info!("🏁 aggregator {:?} created", aggregator.1);
 
         let mut empty_agg = enc.new_aggregate(0, &EntityId::default()).unwrap();
-        enc.add_to_aggregate(&mut empty_agg, &resp_0, &aggregator.0)
+        let mut observed_nonces = Some(BTreeSet::new());
+        enc.add_to_aggregate(&mut empty_agg, &mut observed_nonces, &resp_0, &aggregator.0)
             .unwrap();
 
         // finalize the aggregate
@@ -811,6 +829,7 @@ mod enclave_tests {
         info!("🏁 starting round 1");
         let (resp_1, _) = enc.user_submit_round_msg(&req_r1, &user.1).unwrap();
 
-        // assert_eq!(round_output.dc_msg, req_1.msg);
+        // Ensure we saw one nonce
+        assert_eq!(observed_nonces.unwrap().len(), 2);
     }
 }

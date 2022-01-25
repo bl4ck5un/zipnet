@@ -220,7 +220,7 @@ pub fn compute_anytrust_group_id(keys: &[SgxSigningPubKey]) -> EntityId {
 /// number may not exceed DC_NET_MSGS_PER_WINDOW. If a token ever repeats then the aggregator will
 /// know that the user is disobeying its talking limit.
 #[cfg_attr(feature = "trusted", serde(crate = "serde_sgx"))]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Default)]
 pub struct RateLimitNonce([u8; 32]);
 
 impl RateLimitNonce {

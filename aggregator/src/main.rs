@@ -57,6 +57,14 @@ fn main() -> Result<(), AggregatorError> {
                         .help("The file to which the new aggregator state will be written"),
                 )
                 .arg(
+                    Arg::with_name("leaf-agg")
+                        .short("l")
+                        .long("leaf-agg")
+                        .required(false)
+                        .takes_value(false)
+                        .help("This flag is set if this aggregator is a leaf aggregator"),
+                )
+                .arg(
                     Arg::with_name("server-keys")
                         .short("k")
                         .long("server-keys")
@@ -129,8 +137,10 @@ fn main() -> Result<(), AggregatorError> {
         let keysfile = File::open(pubkeys_filename)?;
         let pubkeys: Vec<ServerPubKeyPackage> = cli_util::load_multi(keysfile)?;
 
+        let is_leaf_agg = matches.is_present("leaf-agg");
+
         // Make a new state and agg registration. Save the state and and print the registration
-        let (state, reg_blob) = AggregatorState::new(&enclave, pubkeys)?;
+        let (state, reg_blob) = AggregatorState::new(&enclave, pubkeys, is_leaf_agg)?;
         let state_path = matches.value_of("agg-state").unwrap();
         save_state(&dbg!(state_path), &state)?;
         save_to_stdout(&reg_blob)?;

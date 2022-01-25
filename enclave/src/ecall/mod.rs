@@ -9,6 +9,7 @@ use sgx_status_t::{SGX_ERROR_INVALID_PARAMETER, SGX_SUCCESS};
 use sgx_types::{sgx_status_t, SgxResult};
 use unseal::{SealInto, UnsealableInto};
 
+use std::collections::BTreeSet;
 use std::slice;
 
 macro_rules! match_ecall_ids {
@@ -95,8 +96,13 @@ pub extern "C" fn ecall_entrypoint(
         ),
         (
             EcallAddToAggregate,
-            (RoundSubmissionBlob, SignedPartialAggregate, SealedSigPrivKey),
-            SignedPartialAggregate,
+            (
+                RoundSubmissionBlob,
+                SignedPartialAggregate,
+                Option<BTreeSet<RateLimitNonce>>,
+                SealedSigPrivKey
+            ),
+            (SignedPartialAggregate, Option<BTreeSet<RateLimitNonce>>),
             aggregation::add_to_aggregate_internal
         ),
         (
