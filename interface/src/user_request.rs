@@ -249,12 +249,12 @@ pub enum UserMsg {
         msg: DcMessage,
         /// Output of previous round signed by one or more anytrust server
         prev_round_output: RoundOutput,
-        /// The number of times the user has already spoken this window
-        times_talked: u32,
+        /// The number of times the user has already talked or reserved this window
+        times_participated: u32,
     },
     Reserve {
-        /// The number of times the user has already spoken this window
-        times_talked: u32,
+        /// The number of times the user has already talked or reserved this window
+        times_participated: u32,
     },
     Cover,
 }

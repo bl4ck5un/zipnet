@@ -28,13 +28,6 @@ fn main() -> Result<(), UserError> {
         .takes_value(true)
         .help("A file that contains this user's previous state");
 
-    let times_talked_arg = Arg::with_name("times-talked")
-        .short("t")
-        .long("times-talked")
-        .required(true)
-        .takes_value(true)
-        .help("The number of times this user has sent a message or reserved a slot during this window");
-
     let round_arg = Arg::with_name("round")
         .short("r")
         .long("round")
@@ -75,7 +68,6 @@ fn main() -> Result<(), UserError> {
                 .about("Reserves a message slot for the next round")
                 .arg(state_arg.clone())
                 .arg(round_arg.clone())
-                .arg(times_talked_arg.clone())
         )
         .subcommand(
             SubCommand::with_name("send-empty")
@@ -92,7 +84,6 @@ fn main() -> Result<(), UserError> {
                 ).as_str())
                 .arg(state_arg.clone())
                 .arg(round_arg.clone())
-                .arg(times_talked_arg.clone())
                 .arg(
                     Arg::with_name("prev-round-output")
                     .short("p")
@@ -150,7 +141,6 @@ fn main() -> Result<(), UserError> {
 
         // Load the round
         let round = cli_util::parse_u32(matches.value_of("round").unwrap())?;
-        let times_talked = cli_util::parse_u32(matches.value_of("times-talked").unwrap())?;
 
         // Load the previous round output. Load a placeholder output if this is the first round of
         // the first window
@@ -162,14 +152,17 @@ fn main() -> Result<(), UserError> {
             RoundOutput::default()
         };
 
+        // Get the state
+        let mut state = load_state(&matches)?;
+
+        // Make the message for this round
         let msg = UserMsg::TalkAndReserve {
             msg: dc_msg,
             prev_round_output,
-            times_talked,
+            times_participated: state.get_times_participated(),
         };
 
         // Now encrypt the message and output it
-        let mut state = load_state(&matches)?;
         let ciphertext = state.submit_round_msg(&enclave, round, msg)?;
         save_to_stdout(&ciphertext)?;
 
@@ -180,12 +173,14 @@ fn main() -> Result<(), UserError> {
     if let Some(matches) = matches.subcommand_matches("reserve-slot") {
         // Load the round
         let round = cli_util::parse_u32(matches.value_of("round").unwrap())?;
-        let times_talked = cli_util::parse_u32(matches.value_of("times-talked").unwrap())?;
 
-        let msg = UserMsg::Reserve { times_talked };
+        // Get the state and make the reservation message
+        let mut state = load_state(&matches)?;
+        let msg = UserMsg::Reserve {
+            times_participated: state.get_times_participated(),
+        };
 
         // Compute the reservation
-        let mut state = load_state(&matches)?;
         let ciphertext = state.submit_round_msg(&enclave, round, msg)?;
         save_to_stdout(&ciphertext)?;
     }

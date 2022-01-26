@@ -277,7 +277,6 @@ encrypt_msgs() {
             | $CMD_PREFIX encrypt-msg \
                   --user-state "../$STATE" \
                   --round $ROUND \
-                  --times-talked $ROUND \
                   --prev-round-output $PREV_ROUND_OUTPUT
         )
 

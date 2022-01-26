@@ -21,6 +21,8 @@ pub struct UserState {
     shared_secrets: SealedSharedSecretDb,
     /// The anytrust servers' KEM and signing pubkeys
     anytrust_group_keys: Vec<ServerPubKeyPackage>,
+    /// Times talked or reserved so far in this window
+    times_participated: u32,
 }
 
 impl UserState {
@@ -40,9 +42,14 @@ impl UserState {
             signing_key: sealed_usk.to_owned(),
             shared_secrets: sealed_shared_secrets.to_owned(),
             anytrust_group_keys: pubkeys,
+            times_participated: 0,
         };
 
         Ok((state, reg_blob))
+    }
+
+    pub fn get_times_participated(&self) -> u32 {
+        self.times_participated
     }
 
     pub fn submit_round_msg(
@@ -51,6 +58,7 @@ impl UserState {
         round: u32,
         msg: UserMsg,
     ) -> Result<RoundSubmissionBlob> {
+        let msg_is_cover = msg.is_cover();
         let req = UserSubmissionReq {
             user_id: self.user_id,
             anytrust_group_id: self.anytrust_group_id,
@@ -64,6 +72,11 @@ impl UserState {
 
         // Ratchet the secrets forward
         self.shared_secrets = ratcheted_secrets;
+
+        // If this message is participatory, increment times_participated
+        if !msg_is_cover {
+            self.times_participated += 1;
+        }
 
         Ok(blob)
     }
