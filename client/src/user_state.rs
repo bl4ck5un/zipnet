@@ -8,7 +8,7 @@ use interface::{
     SealedSigPrivKey, ServerPubKeyPackage, UserMsg, UserRegistrationBlob, UserSubmissionReq,
 };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct UserState {
     /// A unique identifier for this client. Computed as the hash of the client's pubkey.
     user_id: EntityId,
@@ -68,12 +68,16 @@ impl UserState {
             server_pks: self.anytrust_group_keys.clone(),
         };
 
+        // If this round is a new window, clear the number of times participated
+        self.times_participated = 0;
+
+        // Submit the message
         let (blob, ratcheted_secrets) = enclave.user_submit_round_msg(&req, &self.signing_key)?;
 
         // Ratchet the secrets forward
         self.shared_secrets = ratcheted_secrets;
 
-        // If this message is participatory, increment times_participated
+        // If this message was participatory, increment times_participated
         if !msg_is_cover {
             self.times_participated += 1;
         }

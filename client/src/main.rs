@@ -1,16 +1,19 @@
 extern crate common;
 extern crate interface;
 
+mod service;
 mod user_state;
 mod util;
 
 use crate::{
+    service::start_service,
     user_state::UserState,
     util::{base64_from_stdin, load_state, save_state, save_to_stdout, UserError},
 };
 
 use common::{cli_util, enclave_wrapper::DcNetEnclave};
 use interface::{DcMessage, RoundOutput, ServerPubKeyPackage, UserMsg, DC_NET_MESSAGE_LENGTH};
+use log::info;
 use std::fs::File;
 
 use clap::{App, AppSettings, Arg, SubCommand};
@@ -91,6 +94,31 @@ fn main() -> Result<(), UserError> {
                     .value_name("INFILE")
                     .required(true)
                     .help("A file that contains the output of the previous round")
+                )
+        )
+        .subcommand(
+            SubCommand::with_name("start-service")
+                .about("Starts a web service at BIND_ADDR")
+                .arg(state_arg.clone())
+                .arg(round_arg.clone())
+                .arg(
+                    Arg::with_name("bind")
+                        .short("b")
+                        .long("bind")
+                        .value_name("BIND_ADDR")
+                        .required(true)
+                        .help("The local address to bind the service to. Example: localhost:9000"),
+                )
+                .arg(
+                    Arg::with_name("agg-url")
+                        .short("a")
+                        .long("agg-url")
+                        .value_name("URL")
+                        .required(true)
+                        .help(
+                            "The URL of the aggregator this user talks to. Example: \
+                            \"http://192.168.0.10:9000\"",
+                        ),
                 )
         )
         .get_matches();
@@ -183,6 +211,29 @@ fn main() -> Result<(), UserError> {
         // Compute the reservation
         let ciphertext = state.submit_round_msg(&enclave, round, msg)?;
         save_to_stdout(&ciphertext)?;
+    }
+
+    if let Some(matches) = matches.subcommand_matches("start-service") {
+        // Load the args
+        let bind_addr = matches.value_of("bind").unwrap().to_string();
+        let round = cli_util::parse_u32(matches.value_of("round").unwrap())?;
+        let agg_url = matches.value_of("agg-url").unwrap().to_string();
+
+        // Check that the forward-to URL is well-formed
+        let _: actix_web::http::Uri = agg_url
+            .parse()
+            .expect(&format!("{} is not a valid URL", agg_url));
+
+        // Load the user state
+        let user_state = load_state(&matches)?;
+
+        let state = service::ServiceState {
+            user_state,
+            enclave: enclave.clone(),
+            agg_url,
+            round,
+        };
+        start_service(bind_addr, state).unwrap();
     }
 
     enclave.destroy();
