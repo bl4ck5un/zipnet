@@ -147,7 +147,7 @@ setup_aggregators() {
     for i in $(seq 1 $NUM_AGGREGATORS); do
         STATE="${AGG_STATE%.txt}$i.txt"
         AGG_REG=$(
-            $CMD_PREFIX new --leaf-agg --agg-state "../$STATE" --server-keys "../$AGG_SERVERKEYS"
+            $CMD_PREFIX new --level 0 --agg-state "../$STATE" --server-keys "../$AGG_SERVERKEYS"
         )
 
         # Append
@@ -160,7 +160,7 @@ setup_aggregators() {
 
     # Make a new root aggregator and capture the registration data
     AGG_REG=$(
-        $CMD_PREFIX new --agg-state "../$AGG_ROOTSTATE" --server-keys "../$AGG_SERVERKEYS"
+        $CMD_PREFIX new --level 1 --agg-state "../$AGG_ROOTSTATE" --server-keys "../$AGG_SERVERKEYS"
     )
     AGG_REGS="$AGG_REGS;$AGG_REG"
 
