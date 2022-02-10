@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use interface::{
     compute_anytrust_group_id, EntityId, KemPubKey, RoundSubmissionBlob, SealedSharedSecretDb,
     SealedSigPrivKey, ServerPubKeyPackage, UserMsg, UserRegistrationBlob, UserSubmissionReq,
+    DC_NET_ROUNDS_PER_WINDOW,
 };
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -69,7 +70,9 @@ impl UserState {
         };
 
         // If this round is a new window, clear the number of times participated
-        self.times_participated = 0;
+        if round % DC_NET_ROUNDS_PER_WINDOW == 0 {
+            self.times_participated = 0;
+        }
 
         // Submit the message
         let (blob, ratcheted_secrets) = enclave.user_submit_round_msg(&req, &self.signing_key)?;

@@ -23,7 +23,8 @@ NUM_USERS=2
 NUM_AGGREGATORS=1
 NUM_USERS_PER_AGGREGATOR=2
 
-NUM_TEST_ROUNDS=3
+#NUM_TEST_ROUNDS=3
+NUM_TEST_ROUNDS=1
 
 # We define four messages, separated by semicolons. The leading ; is because we index by 1
 MSGS_STR=";testing;hello;world;yo"
@@ -393,16 +394,16 @@ check
 
 start_time=$(date +%s)
 setup_servers
-end_time=$(date +%s)
-elapsed=$(( end_time - start_time ))
-echo "took $elapsed seconds"
-exit 0
+#end_time=$(date +%s)
+#elapsed=$(( end_time - start_time ))
+#echo "took $elapsed seconds"
+#exit 0
 setup_aggregators
 setup_clients
 
 for ROUND in $(seq 0 $(($NUM_TEST_ROUNDS - 1))); do
     start_round
-    encrypt_msgs
-    propagate_aggregates
-    decrypt_msgs
+    #encrypt_msgs
+    #propagate_aggregates
+    #decrypt_msgs
 done

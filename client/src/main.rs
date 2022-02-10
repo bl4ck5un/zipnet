@@ -156,7 +156,7 @@ fn main() -> Result<(), UserError> {
         // Load the message
         let msg = base64_from_stdin()?;
         assert!(
-            msg.len() < DC_NET_MESSAGE_LENGTH,
+            msg.len() <= DC_NET_MESSAGE_LENGTH,
             format!(
                 "input message must be less than {} bytes long",
                 DC_NET_MESSAGE_LENGTH
@@ -211,6 +211,9 @@ fn main() -> Result<(), UserError> {
         // Compute the reservation
         let ciphertext = state.submit_round_msg(&enclave, round, msg)?;
         save_to_stdout(&ciphertext)?;
+
+        // The shared secrets were ratcheted, so we have to save the new state
+        save_state(&matches, &state)?;
     }
 
     if let Some(matches) = matches.subcommand_matches("start-service") {
