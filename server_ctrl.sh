@@ -158,6 +158,10 @@ kill_clients() {
     ps aux | grep sgxdcnet-client | grep -v grep | awk '{print $2}' | xargs kill
 }
 
+# Commands with parameters:
+#     encrypt-msg <MSG> takes a plain string. E.g., `./server_ctrl.sh encrypt-msg hello`
+#     get-round-result <ROUND> takes an integer. E.g., `./server_ctrl.sh get-round-result 4`
+
 if [[ $1 == "start-leader" ]]; then
     start_leader
 elif [[ $1 == "start-followers" ]]; then
