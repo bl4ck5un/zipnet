@@ -6,15 +6,16 @@ set -eu
 
 USER_STATE="client/user-state.txt"
 AGG_FINALAGG="aggregator/final-agg.txt"
+AGG_ROOTSTATE="aggregator/agg-root-state.txt"
 SERVER_STATE="server/server-state.txt"
 SERVER_SHARES="server/shares.txt"
 SERVER_SHARES_PARTIAL="server/partial_shares.txt"
 
 SERVER_ROUNDOUTPUT="server/round_output.txt"
 
-CLIENT_SERVICE_PORT="8322"
-AGGREGATOR_PORT="8422"
-SERVER_LEADER_PORT="8522"
+CLIENT_SERVICE_PORT="8323"
+AGGREGATOR_PORT="8423"
+SERVER_LEADER_PORT="8523"
 
 # -q to reduce clutter
 CMD_PREFIX="cargo run -- "
@@ -23,7 +24,7 @@ CMD_PREFIX="cargo run -- "
 LEADER=1
 NUM_FOLLOWERS=1
 
-ROUND=0
+ROUND=3
 
 # Starts the first client
 start_client() {
@@ -35,6 +36,26 @@ start_client() {
         --round $ROUND \
         --bind "localhost:$CLIENT_SERVICE_PORT" \
         --agg-url "http://localhost:$AGGREGATOR_PORT" &
+
+    cd ..
+}
+
+# Starts the root aggregator
+start_root_agg() {
+    cd aggregator
+
+    # Start the aggregator in 7 sec from now
+    NOW=$(date +%s)
+    START_TIME=$(($NOW + 7))
+
+    STATE="${USER_STATE%.txt}1.txt"
+    $CMD_PREFIX start-service \
+        --agg-state "../$AGG_ROOTSTATE" \
+        --round $ROUND \
+        --bind "localhost:$AGGREGATOR_PORT" \
+        --start-time $START_TIME \
+        --round-duration 10000 \
+        --forward-to "http://localhost:$SERVER_LEADER_PORT" &
 
     cd ..
 }
@@ -69,8 +90,9 @@ start_followers() {
 }
 
 encrypt_msg() {
+    # Base64-encode the given message
     PAYLOAD=$(base64 <<< "$1")
-    echo "PAYLOAD = $PAYLOAD"
+
     # If this isn't the first round, append the previous round output to the payload. Separate with
     # a comma.
     if [[ $ROUND -gt 0 ]]; then
@@ -128,6 +150,10 @@ kill_servers() {
     ps aux | grep sgxdcnet-server | grep -v grep | awk '{print $2}' | xargs kill
 }
 
+kill_aggregators() {
+    ps aux | grep sgxdcnet-aggregator | grep -v grep | awk '{print $2}' | xargs kill
+}
+
 kill_clients() {
     ps aux | grep sgxdcnet-client | grep -v grep | awk '{print $2}' | xargs kill
 }
@@ -136,7 +162,11 @@ if [[ $1 == "start-leader" ]]; then
     start_leader
 elif [[ $1 == "start-followers" ]]; then
     start_followers
+elif [[ $1 == "start-agg" ]]; then
+    start_root_agg
 elif [[ $1 == "start-client" ]]; then
+    start_client
+elif [[ $1 == "start-agg" ]]; then
     start_client
 elif [[ $1 == "encrypt-msg" ]]; then
     encrypt_msg $2
@@ -148,6 +178,12 @@ elif [[ $1 == "round-result" ]]; then
     get_round_result $2
 elif [[ $1 == "stop-servers" ]]; then
     kill_servers
+elif [[ $1 == "stop-aggs" ]]; then
+    kill_aggregators
 elif [[ $1 == "stop-clients" ]]; then
     kill_clients
+elif [[ $1 == "stop-all" ]]; then
+    kill_clients 2> /dev/null || true
+    kill_aggregators 2> /dev/null || true
+    kill_servers 2> /dev/null || true
 fi

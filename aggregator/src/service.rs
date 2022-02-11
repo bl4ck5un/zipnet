@@ -43,8 +43,11 @@ impl ResponseError for ApiError {}
 pub(crate) struct ServiceState {
     pub(crate) agg_state: AggregatorState,
     pub(crate) enclave: DcNetEnclave,
+    /// The URLs of the next aggregators
     pub(crate) forward_urls: Vec<String>,
     pub(crate) round: u32,
+    /// The path to this aggregator's state file. If `None`, state is not persisted to disk
+    pub(crate) agg_state_path: Option<String>,
 }
 
 /// Receives a partial aggregate from an aggregator or a user
@@ -115,19 +118,27 @@ async fn send_aggregate(payload: Vec<u8>, forward_urls: Vec<String>) {
 }
 
 // Saves the state and start the next round
-fn start_next_round(state_path: &str, state: Arc<Mutex<ServiceState>>) {
+fn start_next_round(state: Arc<Mutex<ServiceState>>) {
     let mut handle = state.lock().unwrap();
     let ServiceState {
         ref mut agg_state,
         ref enclave,
         ref mut round,
+        ref agg_state_path,
         ..
     } = *handle;
 
     info!("round {} complete", round);
-    info!("Saving state");
-    save_state(&state_path, agg_state).expect("failed to save state");
+    // Save the state if a path is specified
+    agg_state_path.as_ref().map(|path| {
+        info!("Saving state");
+        match save_state(path, agg_state) {
+            Err(e) => error!("failed to save agg state {:?}", e),
+            _ => (),
+        }
+    });
 
+    // Increment the round and clear the state
     *round += 1;
     agg_state
         .clear(&enclave, *round)
@@ -148,7 +159,6 @@ fn systime_to_instant(time: SystemTime) -> Instant {
 /// Every `round_dur`, ends the round and forwards the finalized aggregate to the next aggregator
 /// or anytrust server up the tree
 async fn round_finalization_loop(
-    state_path: String,
     state: Arc<Mutex<ServiceState>>,
     round_dur: Duration,
     mut start_time: SystemTime,
@@ -175,7 +185,7 @@ async fn round_finalization_loop(
         );
 
         // Start the next round early
-        start_next_round(&state_path, state.clone());
+        start_next_round(state.clone());
 
         // The official round start time is right after propagation terminates. We update this so
         // that end_time is calculated correctly.
@@ -186,7 +196,6 @@ async fn round_finalization_loop(
 #[actix_rt::main]
 pub(crate) async fn start_service(
     bind_addr: String,
-    state_path: String,
     state: ServiceState,
     round_dur: Duration,
     start_time: SystemTime,
@@ -196,7 +205,7 @@ pub(crate) async fn start_service(
     let state_copy = state.clone();
 
     Arbiter::spawn(round_finalization_loop(
-        state_path, state_copy, round_dur, start_time, level,
+        state_copy, round_dur, start_time, level,
     ));
 
     // Start the web server

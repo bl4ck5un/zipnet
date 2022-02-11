@@ -11,14 +11,12 @@ use std::{
     time::Duration,
 };
 
-use actix_rt::Arbiter;
 use actix_web::{
     client::Client,
     http::{StatusCode, Uri},
     post, rt as actix_rt, web, App, HttpResponse, HttpServer, ResponseError,
 };
 use log::{debug, error, info};
-use serde::Deserialize;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -37,16 +35,11 @@ impl ResponseError for ApiError {}
 #[derive(Clone)]
 pub(crate) struct ServiceState {
     pub(crate) user_state: UserState,
-    //pub(crate) user_state_path: String,
     pub(crate) enclave: DcNetEnclave,
     pub(crate) agg_url: String,
     pub(crate) round: u32,
-}
-
-#[derive(Deserialize)]
-struct EncryptMsgData {
-    prev_round_output: String,
-    msg: String,
+    /// The path to this users's state file. If `None`, state is not persisted to disk
+    pub(crate) user_state_path: Option<String>,
 }
 
 /// Receives previous round output and new message to encrypt. These are newline-separated
@@ -59,10 +52,10 @@ async fn encrypt_msg(
     let mut handle = state.get_ref().lock().unwrap();
     let ServiceState {
         ref mut user_state,
-        //ref user_state_path,
         ref enclave,
         ref agg_url,
         round,
+        ref user_state_path,
         ..
     } = handle.deref_mut();
 
@@ -96,15 +89,10 @@ async fn encrypt_msg(
     };
 
     let encoded_round_output = payload_it.next();
-    debug!(
-        "Parsing previous round output, whose length is {:?}",
-        encoded_round_output.map(|e| e.len()),
-    );
     let prev_round_output: RoundOutput = match encoded_round_output {
         Some(s) => cli_util::load(s.trim().as_bytes())?,
         None => RoundOutput::default(),
     };
-    debug!("Parsed");
     let msg = UserMsg::TalkAndReserve {
         msg: dc_msg,
         prev_round_output,
@@ -112,13 +100,18 @@ async fn encrypt_msg(
     };
 
     // Encrypt the message and send it
-    debug!("Making ciphertext");
     let ciphertext = user_state.submit_round_msg(&enclave, *round, msg)?;
-    debug!("Sending ciphertext");
     send_ciphertext(&ciphertext, agg_url).await;
 
-    // Increment the round and save the state
+    // Increment the round and save the user state
     *round += 1;
+    user_state_path.as_ref().map(|path| {
+        info!("Saving state");
+        match save_state(path, user_state) {
+            Err(e) => error!("failed to save user state {:?}", e),
+            _ => (),
+        }
+    });
 
     Ok(HttpResponse::Ok().body("OK\n"))
 }

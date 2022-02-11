@@ -23,15 +23,14 @@ NUM_USERS=2
 NUM_AGGREGATORS=1
 NUM_USERS_PER_AGGREGATOR=2
 
-#NUM_TEST_ROUNDS=3
-NUM_TEST_ROUNDS=1
+NUM_TEST_ROUNDS=3
 
 # We define four messages, separated by semicolons. The leading ; is because we index by 1
 MSGS_STR=";testing;hello;world;yo"
 
 build() {
     make -C enclave
-    for d in "client" "server" "aggregator"; do 
+    for d in "client" "server" "aggregator"; do
         pushd $d && cargo build --release && popd
     done
 }
@@ -403,7 +402,7 @@ setup_clients
 
 for ROUND in $(seq 0 $(($NUM_TEST_ROUNDS - 1))); do
     start_round
-    #encrypt_msgs
-    #propagate_aggregates
-    #decrypt_msgs
+    encrypt_msgs
+    propagate_aggregates
+    decrypt_msgs
 done

@@ -141,6 +141,14 @@ fn main() -> Result<(), AggregatorError> {
                         .help(
                             "The time the specified round will start, in seconds since Unix epoch",
                         ),
+                )
+                .arg(
+                    Arg::with_name("no-persist")
+                        .short("n")
+                        .long("no-persist")
+                        .required(false)
+                        .takes_value(false)
+                        .help("If this is set, the service will not persist its state to disk"),
                 ),
         )
         .get_matches();
@@ -230,14 +238,22 @@ fn main() -> Result<(), AggregatorError> {
         agg_state.clear(&enclave, round)?;
         info!("Initialized round {}", round);
 
+        // If no-persist is set, then the state path is None
+        let agg_state_path = if matches.is_present("no-persist") {
+            None
+        } else {
+            Some(state_path)
+        };
+
         let level = agg_state.level;
         let state = service::ServiceState {
             agg_state,
             enclave,
             forward_urls,
             round,
+            agg_state_path,
         };
-        start_service(bind_addr, state_path, state, round_dur, start_time, level).unwrap();
+        start_service(bind_addr, state, round_dur, start_time, level).unwrap();
     }
 
     Ok(())
