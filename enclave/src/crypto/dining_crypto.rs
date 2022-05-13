@@ -159,10 +159,6 @@ pub fn derive_round_nonce(
     Ok(RateLimitNonce::from_bytes(&h.result()))
 }
 
-/// A RoundSecret is an one-time pad for a given round derived from a set of
-/// DiffieHellmanSharedSecret, one for each anytrust server.
-pub type RoundSecret = DcRoundMessage;
-
 /// Derives a RoundSecret as the XOR of `HKDF(shared_secrets[i], round)` for all `i` in `Some(entity_ids_to_use)`,
 /// if entity_ids_to_use is None, for all `i` in `shared_secrets.keys()`.
 pub fn derive_round_secret(

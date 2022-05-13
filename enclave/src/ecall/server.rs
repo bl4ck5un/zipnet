@@ -9,7 +9,7 @@ use ecall::keygen::new_sgx_keypair_ext_internal;
 use interface::*;
 use log::debug;
 use sgx_types::sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-use sgx_types::SgxResult;
+use sgx_types::{SgxError, SgxResult};
 use std::borrow::ToOwned;
 use std::collections::{BTreeMap, BTreeSet};
 use std::string::ToString;
@@ -79,7 +79,7 @@ pub fn recv_aggregator_registration(
 
     // verify user key
     let attested_pk = &attested_pk.0;
-    warn!("skipping verifying attestation for now");
+    // warn!("skipping verifying attestation for now");
 
     // add user key to pubkey db
     pk_db
@@ -116,7 +116,7 @@ use std::iter::FromIterator;
 pub fn unblind_aggregate(
     input: &(RoundSubmissionBlob, SealedSigPrivKey, SealedSharedSecretDb),
 ) -> SgxResult<(UnblindedAggregateShareBlob, SealedSharedSecretDb)> {
-    let round_msg = input.0.unmarshal()?;
+    let round_msg = &input.0;
     let sig_key = input.1.unseal_into()?;
     let shared_secrets = input.2.unseal_into()?;
 
@@ -150,11 +150,74 @@ pub fn unblind_aggregate(
     // round_msg.aggregated_msg.xor_mut(&round_secret);
 
     let mut unblined_agg = messages_types::UnblindedAggregateShare {
-        encrypted_msg: round_msg,
+        encrypted_msg: round_msg.clone(),
         key_share: round_secret,
         sig: Default::default(),
         pk: Default::default(),
     };
+
+    // sign
+    unblined_agg.sign_mut(&sig_key)?;
+
+    Ok((
+        unblined_agg.marshal()?,
+        shared_secrets.ratchet().seal_into()?,
+    ))
+}
+
+use interface::RoundSecret;
+
+
+pub fn unblind_aggregate_single_thread(
+    input: &(u32, SealedSharedSecretDb, BTreeSet<EntityId>),
+) -> SgxResult<RoundSecret> {
+    let round = input.0;
+    let shared_secrets = input.1.unseal_into()?;
+    let user_ids_in_batch = &input.2;
+
+    if round != shared_secrets.round {
+        error!(
+            "wrong round. round {} != shared_secrets.round {}",
+            round, shared_secrets.round
+        );
+        return Err(SGX_ERROR_INVALID_PARAMETER);
+    }
+
+    // check that user ids in this batch is a subset of all known user ids
+    let user_ids_in_secret_db = BTreeSet::from_iter(shared_secrets.db.keys().map(EntityId::from));
+    if !(user_ids_in_batch.is_subset(&user_ids_in_secret_db)) {
+        error!("user_ids_in_batch is not a subset of user_ids_in_secret_db. user_ids_in_batch = {:?}, user_ids_in_secret_db = {:?}",
+        user_ids_in_batch,
+        user_ids_in_secret_db);
+        return Err(SGX_ERROR_INVALID_PARAMETER);
+    }
+
+    // decrypt key is derived from secret shares with users (identified by round_msg.user_ids)
+    derive_round_secret(round, &shared_secrets, Some(&user_ids_in_batch))
+        .map_err(|_| {
+            error!("crypto error");
+            SGX_ERROR_INVALID_PARAMETER
+        })
+}
+
+pub fn unblind_aggregate_merge(
+    input: &(RoundSubmissionBlob, Vec<RoundSecret>, SealedSigPrivKey, SealedSharedSecretDb)
+) -> SgxResult<(UnblindedAggregateShareBlob, SealedSharedSecretDb)> {
+    let mut round_secret= RoundSecret::default();
+    for rs in input.1.iter() {
+        round_secret.xor_mut(rs);
+    }
+
+    let mut unblined_agg = messages_types::UnblindedAggregateShare {
+        encrypted_msg: input.0.clone(),
+        key_share: round_secret,
+        sig: Default::default(),
+        pk: Default::default(),
+    };
+
+    // sign the final output and rachet the shared secrets
+    let sig_key = input.2.unseal_into()?;
+    let shared_secrets = input.3.unseal_into()?;
 
     // sign
     unblined_agg.sign_mut(&sig_key)?;

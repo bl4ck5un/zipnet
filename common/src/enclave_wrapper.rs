@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use interface::*;
+use std::time::{Duration, Instant};
 
 // error type for enclave operations
 use quick_error::quick_error;
@@ -46,7 +47,7 @@ extern "C" {
     fn test_main_entrance(eid: sgx_enclave_id_t, retval: *mut sgx_status_t) -> sgx_status_t;
 }
 
-const ENCLAVE_OUTPUT_BUF_SIZE: usize = 1024000; // 1MB buffer should be enough?
+const ENCLAVE_OUTPUT_BUF_SIZE: usize = 15 * 1024000; // 5MB buffer should be enough?
 
 #[derive(Clone, Debug)]
 pub struct DcNetEnclave {
@@ -60,7 +61,9 @@ macro_rules! gen_ecall_stub {
             inp: $type_i,
         ) -> crate::EnclaveResult<$type_o> {
             let marshaled_input = serde_cbor::to_vec(&inp)?;
-            log::debug!("input marshaled {} bytes", marshaled_input.len());
+            if marshaled_input.len() > 1_000_000 {
+                log::debug!("{:?} input marshaled {} bytes", $name, marshaled_input.len());
+            }
 
             let mut ret = crate::enclave_wrapper::SGX_SUCCESS;
             let mut out_buf = vec![0u8; crate::enclave_wrapper::ENCLAVE_OUTPUT_BUF_SIZE];
@@ -173,6 +176,18 @@ mod ecall_allowed {
             unblind_aggregate
         ),
         (
+            EcallUnblindAggregatePartial,
+            (u32,&SealedSharedSecretDb,&BTreeSet<EntityId>),
+            RoundSecret,
+            unblind_aggregate_partial
+        ),
+        (
+            EcallUnblindAggregateMerge,
+            (&RoundSubmissionBlob,&[RoundSecret], &SealedSigPrivKey, &SealedSharedSecretDb),
+            (UnblindedAggregateShareBlob, SealedSharedSecretDb),
+            unblind_aggregate_merge
+        ),
+        (
             EcallDeriveRoundOutput,
             (&SealedSigPrivKey,&[UnblindedAggregateShareBlob]),
             RoundOutput,
@@ -192,6 +207,11 @@ mod ecall_allowed {
         ),
     }
 }
+
+use std::iter::FromIterator;
+use itertools::Itertools;
+use std::sync::mpsc;
+use std::thread;
 
 impl DcNetEnclave {
     pub fn init(enclave_file: &'static str) -> EnclaveResult<Self> {
@@ -278,7 +298,7 @@ impl DcNetEnclave {
         _anytrust_group_id: &EntityId,
     ) -> EnclaveResult<SignedPartialAggregate> {
         // A new aggregator is simply an empty blob
-        Ok(SignedPartialAggregate(Vec::new()))
+        Ok(Default::default())
     }
 
     /// Adds the given input from a user to the given partial aggregate
@@ -297,8 +317,7 @@ impl DcNetEnclave {
         )?;
 
         // Update the agg and nonces
-        agg.0.clear();
-        agg.0.extend_from_slice(&new_agg.0);
+        *agg = new_agg;
         *observed_nonces = new_observed_nonces;
 
         Ok(())
@@ -312,14 +331,14 @@ impl DcNetEnclave {
         &self,
         agg: &SignedPartialAggregate,
     ) -> EnclaveResult<RoundSubmissionBlob> {
-        return Ok(RoundSubmissionBlob(agg.0.clone()));
+        return Ok(agg.clone());
     }
 
     /// XORs the shared secrets into the given aggregate. Returns the server's share of the
     /// unblinded aggregate as well as the ratcheted shared secrets.
     ///
     /// This is invoked by the root anytrust server.
-    pub fn unblind_aggregate(
+    pub fn unblind_aggregate_single_thread(
         &self,
         toplevel_agg: &RoundSubmissionBlob,
         signing_key: &SealedSigPrivKey,
@@ -329,6 +348,59 @@ impl DcNetEnclave {
             self.enclave.geteid(),
             (toplevel_agg, signing_key, shared_secrets),
         )
+    }
+
+
+    /// The multi thread version
+    pub fn unblind_aggregate(
+        &self,
+        toplevel_agg: &AggregatedMessage,
+        signing_key: &SealedSigPrivKey,
+        shared_secrets: &SealedSharedSecretDb,
+    ) -> EnclaveResult<(UnblindedAggregateShareBlob, SealedSharedSecretDb)> {
+        const NUM_THREAD: usize = interface::N_THREADS_DERIVE_ROUND_SECRET;
+        let chunk_size = (toplevel_agg.user_ids.len() + NUM_THREAD-1) / NUM_THREAD;
+        assert_ne!(chunk_size, 0);
+
+        let eid = self.enclave.geteid();
+        let round = shared_secrets.round;
+
+        // make a mpsc channel
+        let (tx, rx) = mpsc::channel();
+
+        // // partition the user ids into N batches
+        let user_keys: Vec<EntityId> = toplevel_agg.user_ids.iter().cloned().collect();
+        for uks in &user_keys.into_iter().chunks(chunk_size) {
+            let uks_vec = uks.collect_vec();
+
+            let db_cloned = shared_secrets.clone();
+            let tx_cloned = mpsc::Sender::clone(&tx);
+
+            thread::spawn(move || {
+                info!("thread working on {} ids", uks_vec.len());
+                let user_ids: BTreeSet<EntityId>  = BTreeSet::from_iter(uks_vec.into_iter());
+                let rs = ecall_allowed::unblind_aggregate_partial(
+                    eid,
+                    (round, &db_cloned, &user_ids),
+                ).unwrap();
+                tx_cloned.send(rs);
+            });
+        }
+
+        drop(tx);
+
+        let round_secrets: Vec<RoundSecret> = rx.iter().collect();
+
+        info!("========= {} round secrets obtained.", round_secrets.len());
+
+        let result = ecall_allowed::unblind_aggregate_merge(
+            self.enclave.geteid(),
+            (toplevel_agg, &round_secrets, signing_key, shared_secrets)
+        );
+
+        info!("round secrets merged");
+
+        result
     }
 
     /// Derives the final round output given all the shares of the unblinded aggregates
@@ -476,6 +548,8 @@ mod enclave_tests {
     use log::*;
     use sgx_types::SGX_ECP256_KEY_SIZE;
     use std::{collections::BTreeSet, vec};
+    use tokio::select_variant;
+    use std::time::{Duration, Instant};
 
     fn init_logger() {
         let env = Env::default()
@@ -517,7 +591,7 @@ mod enclave_tests {
             enc.new_user(&spks).unwrap();
 
         let msg = UserMsg::TalkAndReserve {
-            msg: DcMessage([1u8; DC_NET_MESSAGE_LENGTH]),
+            msg: DcMessage(vec![1u8; DC_NET_MESSAGE_LENGTH]),
             prev_round_output: RoundOutput::default(),
             times_participated: 0,
         };
@@ -593,7 +667,7 @@ mod enclave_tests {
         log::info!("user {:?} created", user_reg_uid);
 
         let msg1 = UserMsg::TalkAndReserve {
-            msg: DcMessage([1u8; DC_NET_MESSAGE_LENGTH]),
+            msg: DcMessage(vec![1u8; DC_NET_MESSAGE_LENGTH]),
             prev_round_output: RoundOutput::default(),
             times_participated: 0,
         };
@@ -633,7 +707,7 @@ mod enclave_tests {
         let user_2 = enc.new_user(&server_pks).unwrap();
 
         let msg2 = UserMsg::TalkAndReserve {
-            msg: DcMessage([2u8; DC_NET_MESSAGE_LENGTH]),
+            msg: DcMessage(vec![2u8; DC_NET_MESSAGE_LENGTH]),
             prev_round_output: RoundOutput::default(),
             times_participated: 0,
         };
@@ -689,7 +763,7 @@ mod enclave_tests {
     use interface::*;
 
     fn create_n_servers(
-        n: i32,
+        n: usize,
         enclave: &DcNetEnclave,
     ) -> Vec<(
         SealedSigPrivKey,
@@ -698,7 +772,7 @@ mod enclave_tests {
         ServerRegistrationBlob,
     )> {
         let mut servers = Vec::new();
-        for i in 0..n {
+        for _ in 0..n {
             servers.push(enclave.new_server().unwrap());
         }
 
@@ -730,6 +804,13 @@ mod enclave_tests {
             .unwrap();
     }
 
+    // fn test_run(n_server: usize, n_users: usize) {
+    //     init_logger();
+    //
+    //     let enc = DcNetEnclave::init(TEST_ENCLAVE_PATH).unwrap();
+    //     let servers = create_n_servers(n_server, &enc);
+    // }
+    //
     #[test]
     fn whole_thing() {
         init_logger();
@@ -737,80 +818,131 @@ mod enclave_tests {
         let enc = DcNetEnclave::init(TEST_ENCLAVE_PATH).unwrap();
 
         // create server public keys
-        let num_of_servers = 10;
-        let servers = create_n_servers(num_of_servers, &enc);
+        let num_of_servers = 1;
+        let num_of_users = 10_000;
 
+        let servers = create_n_servers(num_of_servers, &enc);
         let mut server_pks = Vec::new();
         for (_, _, _, k) in servers.iter().cloned() {
             server_pks.push(k)
         }
 
         info!("created {} server keys", num_of_servers);
-        for k in server_pks.iter() {
-            info!("- {:?}", k);
+
+        // create a bunch of fake user
+        let users = (0..num_of_users).map(|_|{enc.new_user(&server_pks).unwrap()}).collect::<Vec<_>>();
+        let user_pks = (0..num_of_users).map(|i| users[i].3.clone()).collect::<Vec<_>>();
+
+        for i in 0..num_of_users {
+            log::info!("user {} created", i)
         }
 
-        // create a fake user
-        let user = enc.new_user(&server_pks).unwrap();
-        let user_pk = &user.3;
-
-        log::info!("user {:?} created. pk={:?}", user.2, user_pk.pk);
-
-        let dc_msg = DcMessage([9u8; DC_NET_MESSAGE_LENGTH]);
-        let msg0 = UserMsg::TalkAndReserve {
-            msg: dc_msg,
-            prev_round_output: RoundOutput::default(),
-            times_participated: 0,
-        };
-
-        let req_0 = UserSubmissionReq {
-            user_id: user.2,
-            anytrust_group_id: user.0.anytrust_group_id(),
-            round: 0,
-            msg: msg0,
-            shared_secrets: user.0,
-            server_pks,
-        };
-
-        log::info!("🏁 submitting {:?}", req_0.msg);
-
-        let (resp_0, _) = enc.user_submit_round_msg(&req_0, &user.1).unwrap();
-
+        // create aggregator
         let aggregator = enc.new_aggregator().expect("agg");
-
-        log::info!("🏁 aggregator {:?} created", aggregator.1);
-
         let mut empty_agg = enc.new_aggregate(0, &EntityId::default()).unwrap();
         let mut observed_nonces = Some(BTreeSet::new());
-        enc.add_to_aggregate(&mut empty_agg, &mut observed_nonces, &resp_0, &aggregator.0)
-            .unwrap();
+
+        info!("🏁 aggregator {:?} created", aggregator.1);
+
+        // server state
+        let mut server_pk_db = vec![SignedPubKeyDb::default(); num_of_servers];
+        let mut server_shared_db = vec![SealedSharedSecretDb::default(); num_of_servers];
+
+        // register users
+        info!("============== registering users");
+        let start = Instant::now();
+
+        for (i, s) in servers.iter().enumerate() {
+            let mut pk_db = SignedPubKeyDb::default();
+            let mut shared_db = SealedSharedSecretDb::default();
+
+            for user in users.iter() {
+                // register users
+                enc.recv_user_registration(&mut pk_db,
+                                           &mut shared_db,
+                                           &s.1,
+                                           &user.3).unwrap();
+                // register the aggregator
+                enc.recv_aggregator_registration(
+                    &mut pk_db,
+                    &aggregator.2).unwrap();
+            }
+
+            info!("========= registration done at server {}", i);
+
+            server_pk_db[i] = pk_db;
+            server_shared_db[i] = shared_db;
+        }
+
+        info!("============== all user have registered. used {:?}", start.elapsed());
+        let start =Instant::now();
+
+
+
+        for i in 0..2 {
+            let user = &users[i];
+
+            let dc_msg = DcMessage(vec![(i + 1) as u8; DC_NET_MESSAGE_LENGTH]);
+            let msg0 = UserMsg::TalkAndReserve {
+                msg: dc_msg.clone(),
+                prev_round_output: RoundOutput::default(),
+                times_participated: 0,
+            };
+
+            let req_0 = UserSubmissionReq {
+                user_id: user.2,
+                anytrust_group_id: user.0.anytrust_group_id(),
+                round: 0,
+                msg: msg0,
+                shared_secrets: user.0.clone(),
+                server_pks: server_pks.clone(),
+            };
+
+            let (resp_0, _) = enc.user_submit_round_msg(&req_0, &user.1).unwrap();
+
+            log::info!("🏁 user {} submitted", i);
+
+            enc.add_to_aggregate(&mut empty_agg, &mut observed_nonces, &resp_0, &aggregator.0)
+                .unwrap();
+        }
+
+        info!("========= all user submitted. Took {:?}", start.elapsed());
+
 
         // finalize the aggregate
-        let final_agg_0 = enc.finalize_aggregate(&empty_agg).unwrap();
+        // let final_agg_0 = enc.finalize_aggregate(&empty_agg).unwrap();
+
+        // fake a lot of user ids
+        let final_agg_0 = RoundSubmissionBlob {
+            round: 0,
+            anytrust_group_id: empty_agg.anytrust_group_id,
+            user_ids: server_shared_db[0].db.keys().map(EntityId::from).collect(),
+            rate_limit_nonce: None,
+            aggregated_msg: empty_agg.aggregated_msg,
+            tee_sig: Default::default(),
+            tee_pk: Default::default()
+        };
+
+        info!("========= decryption begins");
+        let start =Instant::now();
 
         // decryption
         let mut decryption_shares = Vec::new();
-        for s in servers.iter() {
-            let mut pk_db = Default::default();
-            let mut secret_db = Default::default();
-
-            // register users
-            enc.recv_user_registration(&mut pk_db, &mut secret_db, &s.1, &user.3)
-                .unwrap();
-            // register the aggregator
-            enc.recv_aggregator_registration(&mut pk_db, &aggregator.2)
-                .unwrap();
+        for (i, s) in servers.iter().enumerate() {
             // unblind
             let (unblined_agg, _) = enc
-                .unblind_aggregate(&final_agg_0, &s.0, &secret_db)
-                .unwrap();
+                .unblind_aggregate(
+                    &final_agg_0,
+                    &s.0,
+                    &server_shared_db[i]).unwrap();
             decryption_shares.push(unblined_agg);
         }
 
         info!(
-            "🏁 {} decryption shares obtained. Each {} bytes",
+            "🏁 {} decryption shares obtained. Each {} bytes. Took {:?}",
             decryption_shares.len(),
-            decryption_shares[0].0.len()
+            decryption_shares[0].0.len(),
+            start.elapsed(),
         );
 
         // aggregate final shares
@@ -818,20 +950,18 @@ mod enclave_tests {
         let round_output_r0 = enc
             .derive_round_output(&servers[0].0, &decryption_shares)
             .unwrap();
-        info!("✅ round_output {:?}", round_output_r0);
+        // info!("✅ round_output {:?}", round_output_r0);
+        info!("✅ round_output");
 
-        let msg1 = UserMsg::TalkAndReserve {
-            msg: dc_msg,
-            prev_round_output: round_output_r0,
-            times_participated: 1,
-        };
-        let mut req_r1 = req_0.clone();
-        req_r1.msg = msg1;
+        // let msg1 = UserMsg::TalkAndReserve {
+        //     msg: dc_msg,
+        //     prev_round_output: round_output_r0,
+        //     times_participated: 1,
+        // };
+        // let mut req_r1 = req_0.clone();
+        // req_r1.msg = msg1;
 
-        info!("🏁 starting round 1");
-        let (resp_1, _) = enc.user_submit_round_msg(&req_r1, &user.1).unwrap();
-
-        // Ensure we saw one nonce
-        assert_eq!(observed_nonces.unwrap().len(), 2);
+        // info!("🏁 starting round 1");
+        // let (resp_1, _) = enc.user_submit_round_msg(&req_r1, &user.1).unwrap();
     }
 }

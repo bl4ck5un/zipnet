@@ -26,6 +26,7 @@ macro_rules! match_ecall_ids {
 use std::convert::TryFrom;
 use std::string::String;
 use std::vec::Vec;
+use std::time::{Instant};
 
 #[no_mangle]
 pub extern "C" fn ecall_entrypoint(
@@ -36,8 +37,10 @@ pub extern "C" fn ecall_entrypoint(
     output_cap: usize,
     output_used: *mut usize,
 ) -> sgx_status_t {
+    let start = Instant::now();
+
     let env = Env::default()
-        .filter_or("ENCLAVE_LOG_LEVEL", "debug") // "info" or "debug"
+        .filter_or("ENCLAVE_LOG_LEVEL", interface::ENCLAVE_LOG_LEVEL)
         .write_style_or("ENCLAVE_LOG_STYLE", "always");
     let _ = Builder::from_env(env).try_init();
 
@@ -50,7 +53,7 @@ pub extern "C" fn ecall_entrypoint(
     };
 
     // make sure this matches exact with that in enclave_wrapper.rs
-    match_ecall_ids! {
+    let r = match_ecall_ids! {
             ecall_id, inp, inp_len, output, output_cap, output_used,
             (
                 EcallNewSgxKeypair,
@@ -120,6 +123,18 @@ pub extern "C" fn ecall_entrypoint(
             server::unblind_aggregate
         ),
         (
+            EcallUnblindAggregatePartial,
+            (u32,SealedSharedSecretDb,BTreeSet<EntityId>),
+            RoundSecret,
+            server::unblind_aggregate_single_thread
+        ),
+        (
+            EcallUnblindAggregateMerge,
+            (RoundSubmissionBlob,Vec<RoundSecret>, SealedSigPrivKey,SealedSharedSecretDb),
+            (UnblindedAggregateShareBlob, SealedSharedSecretDb),
+            server::unblind_aggregate_merge
+        ),
+        (
             EcallDeriveRoundOutput,
             (SealedSigPrivKey, Vec < UnblindedAggregateShareBlob >),
             RoundOutput,
@@ -137,7 +152,11 @@ pub extern "C" fn ecall_entrypoint(
             SignedPubKeyDb,
             server::recv_server_registration
         ),
-    }
+    };
+
+    warn!("{:?} finished after {:?}", ecall_id, start.elapsed());
+
+    r
 }
 
 macro_rules! unmarshal_or_abort {

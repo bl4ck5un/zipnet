@@ -2,7 +2,6 @@ use crypto::SgxPrivateKey;
 use crypto::SharedSecretsDb;
 use interface::*;
 use messages_types;
-use messages_types::AggregatedMessage;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_cbor;
@@ -193,30 +192,30 @@ pub trait MarshallAs<T> {
 pub trait UnmarshalledAs<T> {
     fn unmarshal(&self) -> SgxResult<T>;
 }
+//
+// impl UnmarshalledAs<AggregatedMessage> for RoundSubmissionBlob {
+//     fn unmarshal(&self) -> sgx_types::SgxResult<AggregatedMessage> {
+//         deserialize_from_vec(&self.0)
+//     }
+// }
+//
+// impl MarshallAs<RoundSubmissionBlob> for interface::AggregatedMessage {
+//     fn marshal(&self) -> SgxResult<RoundSubmissionBlob> {
+//         Ok(RoundSubmissionBlob(serialize_to_vec(&self)?))
+//     }
+// }
 
-impl UnmarshalledAs<AggregatedMessage> for RoundSubmissionBlob {
-    fn unmarshal(&self) -> sgx_types::SgxResult<AggregatedMessage> {
-        deserialize_from_vec(&self.0)
-    }
-}
-
-impl MarshallAs<RoundSubmissionBlob> for messages_types::AggregatedMessage {
-    fn marshal(&self) -> SgxResult<RoundSubmissionBlob> {
-        Ok(RoundSubmissionBlob(serialize_to_vec(&self)?))
-    }
-}
-
-impl MarshallAs<SignedPartialAggregate> for messages_types::AggregatedMessage {
-    fn marshal(&self) -> SgxResult<SignedPartialAggregate> {
-        Ok(SignedPartialAggregate(serialize_to_vec(&self)?))
-    }
-}
-
-impl UnmarshalledAs<AggregatedMessage> for SignedPartialAggregate {
-    fn unmarshal(&self) -> sgx_types::SgxResult<AggregatedMessage> {
-        deserialize_from_vec(&self.0)
-    }
-}
+// impl MarshallAs<SignedPartialAggregate> for interface::AggregatedMessage {
+//     fn marshal(&self) -> SgxResult<SignedPartialAggregate> {
+//         Ok(SignedPartialAggregate(serialize_to_vec(&self)?))
+//     }
+// }
+//
+// impl UnmarshalledAs<AggregatedMessage> for SignedPartialAggregate {
+//     fn unmarshal(&self) -> sgx_types::SgxResult<AggregatedMessage> {
+//         deserialize_from_vec(&self.0)
+//     }
+// }
 
 impl MarshallAs<UnblindedAggregateShareBlob> for messages_types::UnblindedAggregateShare {
     fn marshal(&self) -> sgx_types::SgxResult<UnblindedAggregateShareBlob> {
