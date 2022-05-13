@@ -134,7 +134,7 @@ pub extern "C" fn ecall_entrypoint(
             EcallUnblindAggregatePartial,
             (u32,SealedSharedSecretDb,BTreeSet<EntityId>),
             RoundSecret,
-            server::unblind_aggregate_single_thread
+            server::unblind_aggregate_partial
         ),
         (
             EcallUnblindAggregateMerge,

@@ -64,9 +64,6 @@ macro_rules! gen_ecall_stub {
             let mut start = std::time::Instant::now();
 
             let marshaled_input = serde_cbor::to_vec(&inp)?;
-            if marshaled_input.len() > 1_000_000 {
-                log::debug!("{:?} input marshaled {} bytes", $name, marshaled_input.len());
-            }
 
             let time_marshal_input = start.elapsed();
             start = std::time::Instant::now();
@@ -113,13 +110,15 @@ macro_rules! gen_ecall_stub {
 
             // print time only if ecall took more than 100ms
             if total > std::time::Duration::from_millis(100) {
-                info!("Ecall {:?} took {:?}. MAR={:?}, ALLOC={:?}, EC={:?}, UNMAR={:?}",
+                info!("Ecall {:?} took {:?}. MAR={:?}({}B), ALLOC={:?}, EC={:?}, UNMAR={:?}({}B)",
                 $name,
                 total,
                 time_marshal_input,
+                marshaled_input.len(),
                 time_allocate_out_buf,
                 time_ecall,
-                time_unmarshal);
+                time_unmarshal,
+                outbuf_used);
             }
 
 

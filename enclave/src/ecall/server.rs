@@ -203,7 +203,7 @@ pub fn unblind_aggregate(
 use interface::RoundSecret;
 
 
-pub fn unblind_aggregate_single_thread(
+pub fn unblind_aggregate_partial(
     input: &(u32, SealedSharedSecretDb, BTreeSet<EntityId>),
 ) -> SgxResult<RoundSecret> {
     let round = input.0;
