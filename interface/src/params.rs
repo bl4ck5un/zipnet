@@ -9,7 +9,7 @@ pub const FOOTPRINT_BIT_SIZE: usize = 3;
 pub const FOOTPRINT_N_SLOTS: usize = DC_NET_N_SLOTS * 4;
 
 /// The number of slots in a DC net message
-pub const DC_NET_N_SLOTS: usize = 10000;
+pub const DC_NET_N_SLOTS: usize = 1000;
 /// The number of bytes in each DC net slot
 pub const DC_NET_MESSAGE_LENGTH: usize = 160;
 
@@ -36,4 +36,4 @@ pub fn round_window(round: u32) -> u32 {
 pub const ENCLAVE_LOG_LEVEL: &str = "warn"; // "debug" or "info"
 
 /// Number of threads for deriving round secrets
-pub const N_THREADS_DERIVE_ROUND_SECRET: usize = 10;
+pub const N_THREADS_DERIVE_ROUND_SECRET: usize = 1;

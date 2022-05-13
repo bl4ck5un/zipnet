@@ -358,6 +358,7 @@ impl DcNetEnclave {
         signing_key: &SealedSigPrivKey,
         shared_secrets: &SealedSharedSecretDb,
     ) -> EnclaveResult<(UnblindedAggregateShareBlob, SealedSharedSecretDb)> {
+        let start = Instant::now();
         const NUM_THREAD: usize = interface::N_THREADS_DERIVE_ROUND_SECRET;
         let chunk_size = (toplevel_agg.user_ids.len() + NUM_THREAD-1) / NUM_THREAD;
         assert_ne!(chunk_size, 0);
@@ -387,18 +388,19 @@ impl DcNetEnclave {
             });
         }
 
+        info!("========= set up threads after {:?}", start.elapsed());
+
         drop(tx);
 
         let round_secrets: Vec<RoundSecret> = rx.iter().collect();
-
-        info!("========= {} round secrets obtained.", round_secrets.len());
+        info!("========= threads join after {:?}", start.elapsed());
 
         let result = ecall_allowed::unblind_aggregate_merge(
             self.enclave.geteid(),
             (toplevel_agg, &round_secrets, signing_key, shared_secrets)
         );
 
-        info!("round secrets merged");
+        info!("========= {} round secrets merged after {:?}.", round_secrets.len(), start.elapsed());
 
         result
     }
@@ -819,7 +821,7 @@ mod enclave_tests {
 
         // create server public keys
         let num_of_servers = 1;
-        let num_of_users = 10_000;
+        let num_of_users = 1_000;
 
         let servers = create_n_servers(num_of_servers, &enc);
         let mut server_pks = Vec::new();
@@ -856,16 +858,18 @@ mod enclave_tests {
             let mut pk_db = SignedPubKeyDb::default();
             let mut shared_db = SealedSharedSecretDb::default();
 
-            for user in users.iter() {
+            // register the aggregator
+            enc.recv_aggregator_registration(
+                &mut pk_db,
+                &aggregator.2).unwrap();
+
+            for (j, user) in users.iter().enumerate() {
                 // register users
                 enc.recv_user_registration(&mut pk_db,
                                            &mut shared_db,
                                            &s.1,
                                            &user.3).unwrap();
-                // register the aggregator
-                enc.recv_aggregator_registration(
-                    &mut pk_db,
-                    &aggregator.2).unwrap();
+                info!("user {} registered", j);
             }
 
             info!("========= registration done at server {}", i);
