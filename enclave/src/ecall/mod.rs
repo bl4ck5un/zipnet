@@ -25,8 +25,8 @@ macro_rules! match_ecall_ids {
 
 use std::convert::TryFrom;
 use std::string::String;
+use std::time::Instant;
 use std::vec::Vec;
-use std::time::{Instant};
 
 #[no_mangle]
 pub extern "C" fn ecall_entrypoint(

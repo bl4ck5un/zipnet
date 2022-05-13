@@ -236,7 +236,10 @@ pub fn user_submit_internal(
                 uid, msg_slot, round
             );
         } else {
-            info!("✅ user is permitted to send at slot {} because it's round 0", msg_slot);
+            info!(
+                "✅ user is permitted to send at slot {} because it's round 0",
+                msg_slot
+            );
         }
     } else {
         debug!("✅ user {} is not talking this round", uid);

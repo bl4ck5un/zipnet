@@ -1,8 +1,8 @@
 use crypto::SgxSigningKey;
 use crypto::{SignMutable, Signable};
 use interface::{
-    DcMessage, DcRoundMessage, EntityId, RateLimitNonce, SgxSignature, SgxSigningPubKey, RoundSecret,
-    DC_NET_N_SLOTS, FOOTPRINT_BIT_SIZE,
+    DcMessage, DcRoundMessage, EntityId, RateLimitNonce, RoundSecret, SgxSignature,
+    SgxSigningPubKey, DC_NET_N_SLOTS, FOOTPRINT_BIT_SIZE,
 };
 use sgx_tcrypto::SgxRsaPubKey;
 use sgx_types::SgxError;

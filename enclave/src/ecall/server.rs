@@ -72,11 +72,7 @@ pub fn recv_user_registration(
 }
 
 pub fn recv_user_registration_batch(
-    input: &(
-        SignedPubKeyDb,
-        SealedKemPrivKey,
-        Vec<UserRegistrationBlob>,
-    ),
+    input: &(SignedPubKeyDb, SealedKemPrivKey, Vec<UserRegistrationBlob>),
 ) -> SgxResult<(SignedPubKeyDb, SealedSharedSecretDb)> {
     let mut pk_db = input.0.clone();
     let my_kem_sk = input.1.unseal_into()?;
@@ -88,9 +84,7 @@ pub fn recv_user_registration_batch(
         }
 
         // add user key to pubkey db
-        pk_db
-            .users
-            .insert(EntityId::from(&u.pk), u.clone());
+        pk_db.users.insert(EntityId::from(&u.pk), u.clone());
     }
 
     // Derive secrets
@@ -202,7 +196,6 @@ pub fn unblind_aggregate(
 
 use interface::RoundSecret;
 
-
 pub fn unblind_aggregate_partial(
     input: &(u32, SealedSharedSecretDb, BTreeSet<EntityId>),
 ) -> SgxResult<RoundSecret> {
@@ -228,17 +221,21 @@ pub fn unblind_aggregate_partial(
     }
 
     // decrypt key is derived from secret shares with users (identified by round_msg.user_ids)
-    derive_round_secret(round, &shared_secrets, Some(&user_ids_in_batch))
-        .map_err(|_| {
-            error!("crypto error");
-            SGX_ERROR_INVALID_PARAMETER
-        })
+    derive_round_secret(round, &shared_secrets, Some(&user_ids_in_batch)).map_err(|_| {
+        error!("crypto error");
+        SGX_ERROR_INVALID_PARAMETER
+    })
 }
 
 pub fn unblind_aggregate_merge(
-    input: &(RoundSubmissionBlob, Vec<RoundSecret>, SealedSigPrivKey, SealedSharedSecretDb)
+    input: &(
+        RoundSubmissionBlob,
+        Vec<RoundSecret>,
+        SealedSigPrivKey,
+        SealedSharedSecretDb,
+    ),
 ) -> SgxResult<(UnblindedAggregateShareBlob, SealedSharedSecretDb)> {
-    let mut round_secret= RoundSecret::default();
+    let mut round_secret = RoundSecret::default();
     for rs in input.1.iter() {
         round_secret.xor_mut(rs);
     }
