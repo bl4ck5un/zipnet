@@ -47,7 +47,7 @@ extern "C" {
     fn test_main_entrance(eid: sgx_enclave_id_t, retval: *mut sgx_status_t) -> sgx_status_t;
 }
 
-const ENCLAVE_OUTPUT_BUF_SIZE: usize = 15 * 1024000; // 5MB buffer should be enough?
+const ENCLAVE_OUTPUT_BUF_SIZE: usize = 30 * 1024000; // 5MB buffer should be enough?
 
 #[derive(Clone, Debug)]
 pub struct DcNetEnclave {
@@ -60,14 +60,23 @@ macro_rules! gen_ecall_stub {
             enclave_id: crate::enclave_wrapper::sgx_enclave_id_t,
             inp: $type_i,
         ) -> crate::EnclaveResult<$type_o> {
+            let very_begining = std::time::Instant::now();
+            let mut start = std::time::Instant::now();
+
             let marshaled_input = serde_cbor::to_vec(&inp)?;
             if marshaled_input.len() > 1_000_000 {
                 log::debug!("{:?} input marshaled {} bytes", $name, marshaled_input.len());
             }
 
+            let time_marshal_input = start.elapsed();
+            start = std::time::Instant::now();
+
             let mut ret = crate::enclave_wrapper::SGX_SUCCESS;
             let mut out_buf = vec![0u8; crate::enclave_wrapper::ENCLAVE_OUTPUT_BUF_SIZE];
             let mut outbuf_used = 0usize;
+
+            let time_allocate_out_buf = start.elapsed();
+            start = std::time::Instant::now();
 
             // Call FFI
             let call_ret = unsafe {
@@ -83,6 +92,9 @@ macro_rules! gen_ecall_stub {
                 )
             };
 
+            let time_ecall = start.elapsed();
+            start = std::time::Instant::now();
+
             // Check for errors
             if call_ret != crate::enclave_wrapper::sgx_status_t::SGX_SUCCESS {
                 return Err(crate::enclave_wrapper::EnclaveError::SgxError(call_ret));
@@ -95,6 +107,21 @@ macro_rules! gen_ecall_stub {
                 log::error!("can't unmarshal: {}", e);
                 crate::enclave_wrapper::EnclaveError::MarshallError(e)
             })?;
+
+            let time_unmarshal = start.elapsed();
+            let total = very_begining.elapsed();
+
+            // print time only if ecall took more than 100ms
+            if total > std::time::Duration::from_millis(100) {
+                info!("Ecall {:?} took {:?}. MAR={:?}, ALLOC={:?}, EC={:?}, UNMAR={:?}",
+                $name,
+                total,
+                time_marshal_input,
+                time_allocate_out_buf,
+                time_ecall,
+                time_unmarshal);
+            }
+
 
             Ok(output)
         }
@@ -168,6 +195,12 @@ mod ecall_allowed {
             // output: updated SignedPubKeyDb, SealedSharedSecretDb
             (SignedPubKeyDb, SealedSharedSecretDb),
             recv_user_reg
+        ),
+        (
+            EcallRecvUserRegistrationBatch,
+            (&SignedPubKeyDb, &SealedKemPrivKey, &[UserRegistrationBlob]),
+            (SignedPubKeyDb, SealedSharedSecretDb),
+            recv_user_reg_batch
         ),
         (
             EcallUnblindAggregate,
@@ -350,7 +383,6 @@ impl DcNetEnclave {
         )
     }
 
-
     /// The multi thread version
     pub fn unblind_aggregate(
         &self,
@@ -481,6 +513,23 @@ impl DcNetEnclave {
 
         shared_secrets.db.clear();
         shared_secrets.db.extend(new_secrets_db.db);
+
+        Ok(())
+    }
+
+    pub fn recv_user_registration_batch(   &self,
+                                           pubkeys: &mut SignedPubKeyDb,
+                                           shared_secrets: &mut SealedSharedSecretDb,
+                                           decap_key: &SealedKemPrivKey,
+                                           input_blob: &[UserRegistrationBlob],
+    ) -> EnclaveResult<()> {
+        let (new_pubkey_db, new_secrets_db) = ecall_allowed::recv_user_reg_batch(
+            self.enclave.geteid(),
+            (pubkeys, decap_key, input_blob),
+        )?;
+
+        pubkeys.users = new_pubkey_db.users;
+        shared_secrets.db = new_secrets_db.db;
 
         Ok(())
     }
@@ -821,7 +870,7 @@ mod enclave_tests {
 
         // create server public keys
         let num_of_servers = 1;
-        let num_of_users = 1_000;
+        let num_of_users = 10_000;
 
         let servers = create_n_servers(num_of_servers, &enc);
         let mut server_pks = Vec::new();
@@ -835,9 +884,7 @@ mod enclave_tests {
         let users = (0..num_of_users).map(|_|{enc.new_user(&server_pks).unwrap()}).collect::<Vec<_>>();
         let user_pks = (0..num_of_users).map(|i| users[i].3.clone()).collect::<Vec<_>>();
 
-        for i in 0..num_of_users {
-            log::info!("user {} created", i)
-        }
+        info!("{} user created", num_of_users);
 
         // create aggregator
         let aggregator = enc.new_aggregator().expect("agg");
@@ -863,14 +910,13 @@ mod enclave_tests {
                 &mut pk_db,
                 &aggregator.2).unwrap();
 
-            for (j, user) in users.iter().enumerate() {
-                // register users
-                enc.recv_user_registration(&mut pk_db,
-                                           &mut shared_db,
-                                           &s.1,
-                                           &user.3).unwrap();
-                info!("user {} registered", j);
-            }
+            enc.recv_user_registration_batch(
+                &mut pk_db,
+            &mut shared_db,
+            &s.1,
+                &user_pks).unwrap();
+
+
 
             info!("========= registration done at server {}", i);
 

@@ -71,6 +71,41 @@ pub fn recv_user_registration(
     Ok((pk_db, shared_secrets.seal_into()?))
 }
 
+pub fn recv_user_registration_batch(
+    input: &(
+        SignedPubKeyDb,
+        SealedKemPrivKey,
+        Vec<UserRegistrationBlob>,
+    ),
+) -> SgxResult<(SignedPubKeyDb, SealedSharedSecretDb)> {
+    let mut pk_db = input.0.clone();
+    let my_kem_sk = input.1.unseal_into()?;
+
+    for u in input.2.iter() {
+        // verify user key
+        if !u.verify_attestation() {
+            return Err(SGX_ERROR_INVALID_PARAMETER);
+        }
+
+        // add user key to pubkey db
+        pk_db
+            .users
+            .insert(EntityId::from(&u.pk), u.clone());
+    }
+
+    // Derive secrets
+    let mut others_kem_pks = vec![];
+    for (_, k) in pk_db.users.iter() {
+        others_kem_pks.push(k.pk);
+    }
+
+    let shared_secrets = SharedSecretsDb::derive_shared_secrets(&my_kem_sk, &others_kem_pks)?;
+
+    debug!("shared_secrets {:?}", shared_secrets);
+
+    Ok((pk_db, shared_secrets.seal_into()?))
+}
+
 pub fn recv_aggregator_registration(
     input: &(SignedPubKeyDb, AggRegistrationBlob),
 ) -> SgxResult<SignedPubKeyDb> {

@@ -40,6 +40,7 @@ impl_enum! {
         EcallUserSubmit = 4,
         EcallAddToAggregate = 5,
         EcallRecvUserRegistration = 6,
+        EcallRecvUserRegistrationBatch = 14,
         EcallUnblindAggregate = 7,
         EcallUnblindAggregatePartial = 12,
         EcallUnblindAggregateMerge = 13,
@@ -65,6 +66,7 @@ impl EcallId {
             EcallId::EcallDeriveRoundOutput => "EcallDeriveRoundOutput",
             EcallId::EcallRecvAggregatorRegistration => "EcallRecvAggregatorRegistration",
             EcallId::EcallRecvServerRegistration => "EcallRecvServerRegistration",
+            EcallId::EcallRecvUserRegistrationBatch => "EcallRecvUserRegistrationBatch",
         }
     }
 }

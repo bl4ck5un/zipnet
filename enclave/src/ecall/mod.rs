@@ -37,7 +37,7 @@ pub extern "C" fn ecall_entrypoint(
     output_cap: usize,
     output_used: *mut usize,
 ) -> sgx_status_t {
-    let start = Instant::now();
+    // let start = Instant::now();
 
     let env = Env::default()
         .filter_or("ENCLAVE_LOG_LEVEL", interface::ENCLAVE_LOG_LEVEL)
@@ -117,6 +117,14 @@ pub extern "C" fn ecall_entrypoint(
             server::recv_user_registration
         ),
         (
+            EcallRecvUserRegistrationBatch,
+            // input:
+            (SignedPubKeyDb, SealedKemPrivKey, Vec<UserRegistrationBlob>),
+            // output: updated SignedPubKeyDb, SealedSharedSecretDb
+            (SignedPubKeyDb, SealedSharedSecretDb),
+            server::recv_user_registration_batch
+        ),
+        (
             EcallUnblindAggregate,
             (RoundSubmissionBlob,SealedSigPrivKey,SealedSharedSecretDb),
             (UnblindedAggregateShareBlob, SealedSharedSecretDb),
@@ -153,8 +161,8 @@ pub extern "C" fn ecall_entrypoint(
             server::recv_server_registration
         ),
     };
-
-    warn!("{:?} finished after {:?}", ecall_id, start.elapsed());
+    //
+    // warn!("{:?} finished after {:?}", ecall_id, start.elapsed());
 
     r
 }
