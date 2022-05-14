@@ -610,16 +610,10 @@ mod enclave_tests {
     extern crate sgx_types;
 
     use env_logger::{Builder, Env};
-    use hex::FromHex;
-    use interface::{
-        DcMessage, EntityId, SealedFootprintTicket, SgxProtectedKeyPub, UserSubmissionReq,
-        DC_NET_MESSAGE_LENGTH, SEALED_SGX_SIGNING_KEY_LENGTH, USER_ID_LENGTH,
-    };
+    use interface::{DcMessage, EntityId, UserSubmissionReq, DC_NET_MESSAGE_LENGTH};
     use log::*;
-    use sgx_types::SGX_ECP256_KEY_SIZE;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
     use std::{collections::BTreeSet, vec};
-    use tokio::select_variant;
 
     fn init_logger() {
         let env = Env::default()
@@ -630,19 +624,11 @@ mod enclave_tests {
         let _ = env_logger::builder().is_test(true).try_init();
     }
 
-    #[test]
-    fn key_seal_unseal() {
-        init_logger();
-
-        log::info!("log in test");
-        let enc = DcNetEnclave::init(TEST_ENCLAVE_PATH).unwrap();
-    }
-
     /// create n server public keys
     fn create_server_pubkeys(enc: &DcNetEnclave, n: i32) -> Vec<ServerPubKeyPackage> {
         let mut pks = Vec::new();
 
-        for i in 0..n {
+        for _ in 0..n {
             let s = enc.new_server().unwrap();
             pks.push(s.3);
         }
@@ -657,7 +643,7 @@ mod enclave_tests {
 
         // create server public keys
         let spks = create_server_pubkeys(&enc, 10);
-        let (user_reg_shared_secrets, user_reg_sealed_key, user_reg_uid, user_reg_proof) =
+        let (user_reg_shared_secrets, user_reg_sealed_key, user_reg_uid, _) =
             enc.new_user(&spks).unwrap();
 
         let msg = UserMsg::TalkAndReserve {
@@ -675,7 +661,7 @@ mod enclave_tests {
             server_pks: spks,
         };
 
-        let (resp_1, _) = enc
+        let (_resp_1, _) = enc
             .user_submit_round_msg(&req_1, &user_reg_sealed_key)
             .unwrap();
 
@@ -697,7 +683,7 @@ mod enclave_tests {
 
         // create server public keys
         let spks = create_server_pubkeys(&enc, 10);
-        let (user_reg_shared_secrets, user_reg_sealed_key, user_reg_uid, user_reg_proof) =
+        let (user_reg_shared_secrets, user_reg_sealed_key, user_reg_uid, _) =
             enc.new_user(&spks).unwrap();
 
         let msg = UserMsg::Reserve {
@@ -713,7 +699,7 @@ mod enclave_tests {
             server_pks: spks,
         };
 
-        let (resp_1, _) = enc
+        let (_resp_1, _) = enc
             .user_submit_round_msg(&req_1, &user_reg_sealed_key)
             .unwrap();
 
@@ -731,7 +717,7 @@ mod enclave_tests {
         log::info!("created {} server keys", num_of_servers);
 
         // create a fake user
-        let (user_reg_shared_secrets, user_reg_sealed_key, user_reg_uid, user_reg_proof) =
+        let (user_reg_shared_secrets, user_reg_sealed_key, user_reg_uid, _) =
             enc.new_user(&server_pks).unwrap();
 
         log::info!("user {:?} created", user_reg_uid);
@@ -807,7 +793,7 @@ mod enclave_tests {
 
         let enc = DcNetEnclave::init(TEST_ENCLAVE_PATH).unwrap();
         let pks = create_server_pubkeys(&enc, 2);
-        let (user_reg_shared_secrets, user_reg_sealed_key, user_reg_uid, user_reg_proof) =
+        let (_, user_reg_sealed_key, user_reg_uid, _) =
             enc.new_user(&pks).unwrap();
 
         let pk = enc
@@ -822,7 +808,7 @@ mod enclave_tests {
     fn new_aggregator() {
         let enc = DcNetEnclave::init(TEST_ENCLAVE_PATH).unwrap();
 
-        let (agg_sealed_key, agg_id, agg_reg_proof) = enc.new_aggregator().unwrap();
+        let (agg_sealed_key, agg_id, _) = enc.new_aggregator().unwrap();
 
         let pk = enc.unseal_to_public_key_on_p256(&agg_sealed_key.0).unwrap();
         assert_eq!(EntityId::from(&pk), agg_id);
@@ -1011,7 +997,7 @@ mod enclave_tests {
 
         // aggregate final shares
         // suppose the first server is the leader
-        let round_output_r0 = enc
+        let _round_output_r0 = enc
             .derive_round_output(&servers[0].0, &decryption_shares)
             .unwrap();
         // info!("✅ round_output {:?}", round_output_r0);

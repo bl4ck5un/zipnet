@@ -1,4 +1,5 @@
 [build]
 rustflags =[
-    "-Ctarget-feature=+aes,+ssse3"
+    "-Ctarget-feature=+aes,+ssse3",
+    "--emit","asm"
 ]
