@@ -268,15 +268,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
-name = "aes"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e8b47f52ea9bae42228d07ec09eb676433d7c4ed1ebdf0f1d1c29ed446f1ab8"
+name = "aes-ctr"
+version = "0.3.0"
+source = "git+https://github.com/mesalock-linux/rustcrypto-stream-ciphers-sgx#2586d36ca27f35ede675cf60639677ab66671b61"
 dependencies = [
- "cfg-if 1.0.0",
- "cipher",
- "cpufeatures 0.2.2",
- "opaque-debug 0.3.0",
+ "aesni",
+ "stream-cipher",
+]
+
+[[package]]
+name = "aesni"
+version = "0.6.0"
+source = "git+https://github.com/mesalock-linux/rustcrypto-block-ciphers-sgx#13b792c18d255b0f8d5828ead15887ed09cfd96f"
+dependencies = [
+ "block-cipher-trait",
+ "opaque-debug 0.2.3",
+ "stream-cipher",
 ]
 
 [[package]]
@@ -423,10 +430,22 @@ dependencies = [
 [[package]]
 name = "block-buffer"
 version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0940dc441f31689269e10ac70eb1002a3a1d3ad1390e030043662eb7fe4688b"
+dependencies = [
+ "block-padding 0.1.5",
+ "byte-tools 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "byteorder 1.4.3",
+ "generic-array 0.12.4",
+]
+
+[[package]]
+name = "block-buffer"
+version = "0.7.3"
 source = "git+https://github.com/mesalock-linux/rustcrypto-utils-sgx#07ebf780554e018037f750186d61ea9bdc031148"
 dependencies = [
- "block-padding",
- "byte-tools",
+ "block-padding 0.1.4",
+ "byte-tools 0.3.1 (git+https://github.com/mesalock-linux/rustcrypto-utils-sgx)",
  "byteorder 1.3.4",
  "generic-array 0.12.4",
 ]
@@ -441,11 +460,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "block-cipher-trait"
+version = "0.6.2"
+source = "git+https://github.com/mesalock-linux/rustcrypto-traits-sgx#7a5cb154f438c2401b3d8e37de96dd0acf8f493e"
+dependencies = [
+ "generic-array 0.12.4",
+]
+
+[[package]]
 name = "block-padding"
 version = "0.1.4"
 source = "git+https://github.com/mesalock-linux/rustcrypto-utils-sgx#07ebf780554e018037f750186d61ea9bdc031148"
 dependencies = [
- "byte-tools",
+ "byte-tools 0.3.1 (git+https://github.com/mesalock-linux/rustcrypto-utils-sgx)",
+]
+
+[[package]]
+name = "block-padding"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa79dedbb091f449f1f39e53edf88d5dbe95f895dae6135a8d7b881fb5af73f5"
+dependencies = [
+ "byte-tools 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -473,6 +509,12 @@ name = "bumpalo"
 version = "3.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c59e7af012c713f529e7a3ee57ce9b31ddd858d4b512923602f74608b009631"
+
+[[package]]
+name = "byte-tools"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3b5ca7a04898ad4bcd41c90c5285445ff5b791899bb1b0abdd2a2aa791211d7"
 
 [[package]]
 name = "byte-tools"
@@ -531,15 +573,6 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
-
-[[package]]
-name = "cipher"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ee52072ec15386f770805afd189a01c8841be8696bed250fa2f13c4c0d6dfb7"
-dependencies = [
- "generic-array 0.14.4",
-]
 
 [[package]]
 name = "clap"
@@ -621,15 +654,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cpufeatures"
-version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59a6001667ab124aebae2a495118e11d30984c3a653e99d86d58971708cf5e4b"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "crc32fast"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -648,18 +672,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ctr"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "049bb91fb4aaf0e3c7efa6cd5ef877dbbbd15b39dad06d9948de4ec8a75761ea"
-dependencies = [
- "cipher",
-]
-
-[[package]]
 name = "dcnetenclave"
 version = "1.0.0"
 dependencies = [
+ "aes-ctr",
  "bitvec",
  "byteorder 1.3.4",
  "env_logger 0.7.1",
@@ -669,7 +685,7 @@ dependencies = [
  "log 0.4.14 (git+https://github.com/mesalock-linux/log-sgx)",
  "quick-error 1.2.2",
  "rand 0.8.4",
- "rand_chacha 0.3.1",
+ "rand_core 0.6.3",
  "serde 1.0.118",
  "serde_cbor 0.11.1 (git+https://github.com/mesalock-linux/cbor-sgx)",
  "sgx_rand",
@@ -694,6 +710,15 @@ dependencies = [
  "quote 1.0.9",
  "rustc_version 0.3.3",
  "syn 1.0.73",
+]
+
+[[package]]
+name = "digest"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3d0c8c8752312f9713efd397ff63acb9f85585afbf179282e720e7704954dd5"
+dependencies = [
+ "generic-array 0.12.4",
 ]
 
 [[package]]
@@ -1086,7 +1111,7 @@ name = "hkdf"
 version = "0.8.0"
 source = "git+https://github.com/bl4ck5un/KDFs?branch=v0.8.0-sgx#735fb91e1b5ca1f3e2761f61234b49b85c17b454"
 dependencies = [
- "digest 0.8.1",
+ "digest 0.8.1 (git+https://github.com/mesalock-linux/rustcrypto-traits-sgx)",
  "hmac",
 ]
 
@@ -1096,7 +1121,7 @@ version = "0.7.1"
 source = "git+https://github.com/mesalock-linux/rustcrypto-MACs-sgx#e8e1410b9c82d2e59da42fa8b0d8ed38e80a203c"
 dependencies = [
  "crypto-mac",
- "digest 0.8.1",
+ "digest 0.8.1 (git+https://github.com/mesalock-linux/rustcrypto-traits-sgx)",
 ]
 
 [[package]]
@@ -1217,12 +1242,9 @@ dependencies = [
 name = "interface"
 version = "0.1.0"
 dependencies = [
- "aes",
  "base64",
  "byteorder 1.3.4",
  "cfg-if 1.0.0",
- "cipher",
- "ctr",
  "hex",
  "rand_core 0.6.3",
  "serde 1.0.118",
@@ -1233,7 +1255,7 @@ dependencies = [
  "sgx_tstd",
  "sgx_types",
  "sha2 0.8.0",
- "sha2 0.9.5",
+ "sha2 0.8.2",
 ]
 
 [[package]]
@@ -2256,7 +2278,7 @@ checksum = "8c4cfa741c5832d0ef7fab46cabed29c2aae926db0b11bb2069edd8db5e64e16"
 dependencies = [
  "block-buffer 0.9.0",
  "cfg-if 1.0.0",
- "cpufeatures 0.1.4",
+ "cpufeatures",
  "digest 0.9.0",
  "opaque-debug 0.3.0",
 ]
@@ -2272,8 +2294,8 @@ name = "sha2"
 version = "0.8.0"
 source = "git+https://github.com/mesalock-linux/rustcrypto-hashes-sgx#54ac4af765ec6b424add4e7559e82328bd052060"
 dependencies = [
- "block-buffer 0.7.3",
- "digest 0.8.1",
+ "block-buffer 0.7.3 (git+https://github.com/mesalock-linux/rustcrypto-utils-sgx)",
+ "digest 0.8.1 (git+https://github.com/mesalock-linux/rustcrypto-traits-sgx)",
  "fake-simd",
  "opaque-debug 0.2.3",
  "sgx_tstd",
@@ -2281,15 +2303,14 @@ dependencies = [
 
 [[package]]
 name = "sha2"
-version = "0.9.5"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b362ae5752fd2137731f9fa25fd4d9058af34666ca1966fb969119cc35719f12"
+checksum = "a256f46ea78a0c0d9ff00077504903ac881a1dafdc20da66545699e7776b3e69"
 dependencies = [
- "block-buffer 0.9.0",
- "cfg-if 1.0.0",
- "cpufeatures 0.1.4",
- "digest 0.9.0",
- "opaque-debug 0.3.0",
+ "block-buffer 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "digest 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fake-simd",
+ "opaque-debug 0.2.3",
 ]
 
 [[package]]
@@ -2397,6 +2418,14 @@ name = "stdweb-internal-runtime"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "213701ba3370744dcd1a12960caa4843b3d68b4d1c0a5d575e0d65b2ee9d16c0"
+
+[[package]]
+name = "stream-cipher"
+version = "0.3.2"
+source = "git+https://github.com/mesalock-linux/rustcrypto-traits-sgx#7a5cb154f438c2401b3d8e37de96dd0acf8f493e"
+dependencies = [
+ "generic-array 0.12.4",
+]
 
 [[package]]
 name = "strsim"

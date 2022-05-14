@@ -120,6 +120,7 @@ impl MultiSignable for RoundOutput {
     }
 }
 
+mod aes_rng;
 mod dining_crypto;
 mod keys;
 

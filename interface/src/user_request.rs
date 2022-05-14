@@ -164,11 +164,11 @@ impl From<[u8; USER_ID_LENGTH]> for EntityId {
 impl From<&SgxProtectedKeyPub> for EntityId {
     fn from(pk: &SgxProtectedKeyPub) -> Self {
         let mut hasher = Sha256::new();
-        hasher.update("anytrust_group_id");
-        hasher.update(pk.gx);
-        hasher.update(pk.gy);
+        hasher.input("anytrust_group_id");
+        hasher.input(pk.gx);
+        hasher.input(pk.gy);
 
-        let digest = hasher.finalize();
+        let digest = hasher.result();
 
         let mut id = EntityId::default();
         id.0.copy_from_slice(&digest);
@@ -194,11 +194,11 @@ pub fn compute_group_id(ids: &BTreeSet<EntityId>) -> EntityId {
     // The group ID of a set of entities is the hash of their IDs, concatenated in ascending order.
     // There's also the context str of "grp" prepended.
     let mut hasher = Sha256::new();
-    hasher.update(b"grp");
+    hasher.input(b"grp");
     for id in ids {
-        hasher.update(&id.0);
+        hasher.input(&id.0);
     }
-    let digest = hasher.finalize();
+    let digest = hasher.result();
 
     let mut id = EntityId::default();
     id.0.copy_from_slice(&digest);

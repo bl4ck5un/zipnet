@@ -159,6 +159,8 @@ pub fn derive_round_nonce(
     Ok(RateLimitNonce::from_bytes(&h.result()))
 }
 
+use self::aes_rng::Aes128Rng;
+
 /// Derives a RoundSecret as the XOR of `HKDF(shared_secrets[i], round)` for all `i` in `Some(entity_ids_to_use)`,
 /// if entity_ids_to_use is None, for all `i` in `shared_secrets.keys()`.
 pub fn derive_round_secret(
