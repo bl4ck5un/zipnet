@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use interface::*;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 // error type for enclave operations
 use quick_error::quick_error;
@@ -415,7 +415,7 @@ impl DcNetEnclave {
                 let rs =
                     ecall_allowed::unblind_aggregate_partial(eid, (round, &db_cloned, &user_ids))
                         .unwrap();
-                tx_cloned.send(rs);
+                tx_cloned.send(rs).unwrap();
             });
         }
 
@@ -447,7 +447,6 @@ impl DcNetEnclave {
         signing_key: &SealedSigPrivKey,
         shared_secrets: &SealedSharedSecretDb,
     ) -> EnclaveResult<(UnblindedAggregateShareBlob, SealedSharedSecretDb)> {
-        let start = Instant::now();
         self.unblind_aggregate_mt(
             toplevel_agg,
             signing_key,

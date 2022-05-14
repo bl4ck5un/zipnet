@@ -3,19 +3,17 @@ extern crate sgx_types;
 
 use self::interface::*;
 use crate::crypto::Xor;
-use crate::unseal::{MarshallAs, UnsealableInto};
+use crate::unseal::UnsealableInto;
 use attestation::Attested;
 use byteorder::ByteOrder;
 use byteorder::LittleEndian;
-use core::convert::TryInto;
 use crypto;
-use crypto::{MultiSignable, SgxPrivateKey, SharedSecretsDb, SignMutable};
+use crypto::{MultiSignable, SgxPrivateKey, SignMutable};
 use interface::UserSubmissionReq;
 use log::debug;
 use sgx_status_t::{SGX_ERROR_INVALID_PARAMETER, SGX_ERROR_UNEXPECTED};
-use sgx_tcrypto::SgxEccHandle;
 use sgx_types::sgx_status_t::SGX_ERROR_SERVICE_UNAVAILABLE;
-use sgx_types::{SgxError, SgxResult};
+use sgx_types::SgxResult;
 use sha2::Digest;
 use sha2::Sha256;
 use std::collections::BTreeSet;
@@ -125,7 +123,7 @@ fn derive_reservation(
 
         let hash = h.result().to_vec();
 
-        (LittleEndian::read_u32(&hash))
+        LittleEndian::read_u32(&hash)
     };
 
     // hash three things to u32

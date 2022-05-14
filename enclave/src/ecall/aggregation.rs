@@ -3,13 +3,10 @@ use crypto::*;
 use interface::*;
 use sgx_types::SgxResult;
 use std::prelude::v1::*;
-use types::*;
 
-use crate::unseal::{UnmarshalledAs, UnsealableInto};
+use crate::unseal::UnsealableInto;
 use sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-use sgx_types::sgx_status_t::{SGX_ERROR_SERVICE_UNAVAILABLE, SGX_SUCCESS};
 use std::collections::BTreeSet;
-use unseal::MarshallAs;
 
 pub fn add_to_aggregate_internal(
     input: &(

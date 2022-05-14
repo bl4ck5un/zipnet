@@ -1,17 +1,15 @@
 use crate::attestation::Attested;
 use crate::crypto::Xor;
-use crate::crypto::{
-    derive_round_secret, KemPrvKey, SgxPrivateKey, SharedSecretsDb, SignMutable, Signable,
-};
+use crate::crypto::{derive_round_secret, SgxPrivateKey, SharedSecretsDb, SignMutable};
 use crate::messages_types;
 use crate::unseal::{MarshallAs, UnmarshalledAs, UnsealableInto};
 use ecall::keygen::new_sgx_keypair_ext_internal;
 use interface::*;
 use log::debug;
 use sgx_types::sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
-use sgx_types::{SgxError, SgxResult};
+use sgx_types::SgxResult;
 use std::borrow::ToOwned;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::string::ToString;
 use std::vec;
 

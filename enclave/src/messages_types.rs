@@ -1,14 +1,9 @@
 use crypto::SgxSigningKey;
 use crypto::{SignMutable, Signable};
-use interface::{
-    DcMessage, DcRoundMessage, EntityId, RateLimitNonce, RoundSecret, SgxSignature,
-    SgxSigningPubKey, DC_NET_N_SLOTS, FOOTPRINT_BIT_SIZE,
-};
-use sgx_tcrypto::SgxRsaPubKey;
+use interface::{RoundSecret, SgxSignature, SgxSigningPubKey};
 use sgx_types::SgxError;
 use sha2::Digest;
 use sha2::Sha256;
-use std::collections::BTreeSet;
 use std::vec::Vec;
 
 // /// A (potentially aggregated) message that's produced by an enclave

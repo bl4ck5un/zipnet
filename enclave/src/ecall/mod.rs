@@ -25,7 +25,6 @@ macro_rules! match_ecall_ids {
 
 use std::convert::TryFrom;
 use std::string::String;
-use std::time::Instant;
 use std::vec::Vec;
 
 #[no_mangle]

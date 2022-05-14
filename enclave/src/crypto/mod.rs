@@ -1,4 +1,4 @@
-use crate::interface::{SgxSignature, SgxSigningPubKey};
+use crate::interface::{RoundOutput, SgxSignature, SgxSigningPubKey};
 use crate::types::CryptoError;
 use sgx_types::{SgxError, SgxResult, SGX_ECP256_KEY_SIZE};
 use std::vec::Vec;
@@ -76,8 +76,6 @@ pub trait MultiSignable {
     /// return indices of keys that verify
     fn verify_multisig(&self, pks: &[SgxSigningPubKey]) -> SgxResult<Vec<usize>>;
 }
-
-use interface::{RoundOutput, SgxProtectedKeyPub};
 
 impl MultiSignable for RoundOutput {
     fn digest(&self) -> Vec<u8> {

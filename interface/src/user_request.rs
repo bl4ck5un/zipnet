@@ -4,7 +4,7 @@ use std::{collections::BTreeSet, vec};
 use crate::{array2d::Array2D, ecall_interface_types::*, params::*, sgx_protected_keys::*};
 
 use sha2::{Digest, Sha256};
-use std::fmt::{Debug, Display, Formatter, Result as FmtResult, Write};
+use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
 // a wrapper around RawMessage so that we can impl traits. This stores DC_NET_MESSAGE_LENGTH bytes
 #[cfg_attr(feature = "trusted", serde(crate = "serde_sgx"))]

@@ -17,7 +17,6 @@ cfg_if! {
         extern crate sgx_sha2 as sha2;
         extern crate byteorder;
         extern crate sgx_rand;
-        #[macro_use]
         extern crate sgx_rand_derive;
         extern crate sgx_tcrypto;
     } else {

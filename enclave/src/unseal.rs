@@ -7,7 +7,7 @@ use serde::Serialize;
 use serde_cbor;
 use sgx_tseal::SgxSealedData;
 use sgx_types::sgx_status_t::{SGX_ERROR_INVALID_PARAMETER, SGX_ERROR_UNEXPECTED};
-use sgx_types::{sgx_sealed_data_t, SgxError, SgxResult};
+use sgx_types::{sgx_sealed_data_t, SgxResult};
 use std::borrow::ToOwned;
 use std::vec::Vec;
 
