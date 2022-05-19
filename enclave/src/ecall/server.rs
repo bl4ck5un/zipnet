@@ -310,3 +310,20 @@ pub fn derive_round_output(
 
     Ok(round_output)
 }
+
+pub fn leak_dh_secrets(sealed: &SealedSharedSecretDb) -> SgxResult<SealedSharedSecretDb> {
+    warn!("this ecall leaks information.");
+
+    let mut unsealed = SealedSharedSecretDb {
+        round: sealed.round,
+        db: Default::default(),
+    };
+
+    let ss = sealed.unseal_into()?;
+
+    for k in ss.db.keys() {
+        unsealed.db.insert(*k, Vec::from(ss.db[k].as_ref()));
+    }
+
+    Ok(unsealed)
+}

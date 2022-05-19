@@ -36,17 +36,18 @@ impl_enum! {
         EcallNewSgxKeypair = 1,
         EcallUnsealToPublicKey = 2,
         EcallNewUser = 3,
-        EcallNewServer = 11,
-        EcallUserSubmit = 4,
-        EcallAddToAggregate = 5,
-        EcallRecvUserRegistration = 6,
-        EcallRecvUserRegistrationBatch = 14,
-        EcallUnblindAggregate = 7,
-        EcallUnblindAggregatePartial = 12,
-        EcallUnblindAggregateMerge = 13,
-        EcallDeriveRoundOutput = 8,
-        EcallRecvAggregatorRegistration = 9,
-        EcallRecvServerRegistration = 10,
+        EcallNewServer = 4,
+        EcallUserSubmit = 5,
+        EcallAddToAggregate = 6,
+        EcallRecvUserRegistration =7,
+        EcallRecvUserRegistrationBatch = 8,
+        EcallUnblindAggregate = 9,
+        EcallUnblindAggregatePartial = 10,
+        EcallUnblindAggregateMerge = 11,
+        EcallDeriveRoundOutput = 12,
+        EcallRecvAggregatorRegistration = 13,
+        EcallRecvServerRegistration = 14,
+        EcallLeakDHSecrets = 15,
     }
 }
 
@@ -67,6 +68,7 @@ impl EcallId {
             EcallId::EcallRecvAggregatorRegistration => "EcallRecvAggregatorRegistration",
             EcallId::EcallRecvServerRegistration => "EcallRecvServerRegistration",
             EcallId::EcallRecvUserRegistrationBatch => "EcallRecvUserRegistrationBatch",
+            EcallId::EcallLeakDHSecrets => "EcallLeakDHSecrets",
         }
     }
 }

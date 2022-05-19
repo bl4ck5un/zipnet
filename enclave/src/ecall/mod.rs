@@ -159,6 +159,12 @@ pub extern "C" fn ecall_entrypoint(
             SignedPubKeyDb,
             server::recv_server_registration
         ),
+        (
+            EcallLeakDHSecrets,
+            SealedSharedSecretDb,
+            SealedSharedSecretDb,
+            server::leak_dh_secrets
+        ),
     };
     //
     // warn!("{:?} finished after {:?}", ecall_id, start.elapsed());
