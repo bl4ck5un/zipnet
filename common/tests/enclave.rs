@@ -372,9 +372,9 @@ fn many_user_one_server() {
     };
 
     for unblind_func in &[
-        UnblindMethod::SingleThreadUnblind,
+        // UnblindMethod::SingleThreadUnblind,
         UnblindMethod::MultiThreadUnblind(10),
-        UnblindMethod::OutOfEnclaveMultiThreadUnblind(10),
+        // UnblindMethod::OutOfEnclaveMultiThreadUnblind(10),
     ] {
         info!("========= decryption begins");
         let start = Instant::now();
