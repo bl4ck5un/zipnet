@@ -24,7 +24,8 @@ SERVER_PORT="28942"
 SERVER_IP=("18.117.84.139" "18.117.127.206" "3.145.160.228" "18.221.166.254" "18.224.16.42")
 
 # -q to reduce clutter
-CMD_PREFIX="cargo run --release -- "
+# added RUSTFLAGS to ensure AES-NI is used. https://docs.rs/aes/0.7.5/aes/#x86x86_64-intrinsics-aes-ni
+CMD_PREFIX="RUSTFLAGS=-Ctarget-feature=+aes,+ssse3 cargo run --release -- "
 SERVER_CMD_PREFIX="/home/ubuntu/.cargo/bin/cargo cargo run -- "
 # Assume wlog that the leading anytrust node is the first one
 LEADER=1
