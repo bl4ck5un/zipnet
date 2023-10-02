@@ -3,5 +3,3 @@ rustflags =[
     "-Ctarget-feature=+aes,+ssse3",
     "--emit","asm"
 ]
-
-target-dir = "/tmp/sgxdcnet/enclave/target"

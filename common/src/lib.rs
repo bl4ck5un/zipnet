@@ -8,9 +8,12 @@ extern crate tonic;
 
 pub mod cli_util;
 pub mod enclave;
-pub mod types;
+pub mod types_nosgx;
+pub mod funcs_nosgx;
 
+mod aes_prng;
 mod ecall_wrapper;
+
 use enclave::EnclaveResult;
 
 pub mod dc_proto {

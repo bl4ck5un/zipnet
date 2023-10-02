@@ -1,33 +1,48 @@
 use crate::util::{AggregatorError, Result};
 
-use ed25519_dalek::{PublicKey, SecretKey};
+use ed25519_dalek::{SecretKey, PublicKey};
 extern crate rand;
 use rand::rngs::OsRng;
 
-use common::types::{
-    AggRegistrationBlob, AggregatedMessage, SignMutable, Signable, SubmissionMessage,
+use interface::{
+    EntityId,
+    RateLimitNonce,
+    UserSubmissionMessageUpdated,
+
 };
-use interface::{EntityId, RateLimitNonce, UserSubmissionMessage, Xor};
+use common::types_nosgx::{
+    AggRegistrationBlobNoSGX,
+    AggregatedMessage,
+    SignableNoSGX,
+    SignMutableNoSGX,
+    XorNoSGX,
+    SubmissionMessage,
+};
+use common::funcs_nosgx::verify_user_submission_msg;
 use std::collections::BTreeSet;
 use std::iter::FromIterator;
 
-use log::{debug, error, warn};
+use log::{error, debug, warn};
 
 /// Create a new secret key for an aggregator.
-/// Returns secret key, entity id, and an AggRegistrationBlob that contains the
+/// Returns secret key, entity id, and an AggRegistrationBlobNoSGX that contains the
 /// information to send to anytrust nodes.
-pub fn new_aggregator() -> Result<(SecretKey, EntityId, AggRegistrationBlob)> {
-    let mut csprng = OsRng {};
+pub fn new_aggregator() -> Result<(SecretKey, EntityId, AggRegistrationBlobNoSGX)> {
+    let mut csprng = OsRng{};
     let sk = SecretKey::generate(&mut csprng);
     // The standard hash function used for most ed25519 libraries is SHA-512
     let pk: PublicKey = (&sk).into();
 
-    let blob = AggRegistrationBlob {
+    let blob = AggRegistrationBlobNoSGX {
         pk,
         role: "agg".to_string(),
     };
 
-    Ok((sk, EntityId::from(&pk), blob))
+    Ok((
+        sk,
+        EntityId::from(&pk),
+        blob,
+    ))
 }
 
 /// TODO: Consider removing this function
@@ -35,7 +50,9 @@ pub fn new_aggregator() -> Result<(SecretKey, EntityId, AggRegistrationBlob)> {
 /// the parent aggregator or an anytrust server.
 /// Note: this is an identity function because AggregatedMessage and AggregatedMessage
 /// are exact the same thing.
-pub fn finalize_aggregate(agg: &AggregatedMessage) -> Result<AggregatedMessage> {
+pub fn finalize_aggregate(
+    agg: &AggregatedMessage,
+) -> Result<AggregatedMessage> {
     return Ok(agg.clone());
 }
 
@@ -54,7 +71,7 @@ pub fn add_to_aggregate(
             // Update the agg and nonces
             *agg = res.0;
             *observed_nonces = res.1;
-        }
+        },
         SubmissionMessage::AggSubmission(new_input) => {
             let res = add_to_agg((new_input, agg, observed_nonces, signing_key))?;
             // Update the agg and nonces
@@ -92,7 +109,7 @@ fn add_to_agg(
     match incoming_msg.verify() {
         Ok(()) => {
             debug!("signature verification succeeded");
-        }
+        },
         Err(e) => {
             error!("can't verify sig on incoming_msg: {:?}", e);
             return Err(AggregatorError::InvalidParameter);
@@ -163,10 +180,10 @@ fn add_to_agg(
         current_aggregation.user_ids.extend(&incoming_msg.user_ids);
         current_aggregation
             .aggregated_msg
-            .xor_mut(&incoming_msg.aggregated_msg);
+            .xor_mut_nosgx(&incoming_msg.aggregated_msg);
 
         // sign
-        match current_aggregation.sign_mut(&sk) {
+        match current_aggregation.sign_mut(&sk){
             Ok(()) => (),
             Err(e) => {
                 error!("can't sign on current aggregation: {:?}", e);
@@ -182,7 +199,7 @@ fn add_to_agg(
 
 fn add_to_agg_user_submit(
     input: (
-        &UserSubmissionMessage,
+        &UserSubmissionMessageUpdated,
         &AggregatedMessage,
         &Option<BTreeSet<RateLimitNonce>>,
         &SecretKey,
@@ -203,11 +220,14 @@ fn add_to_agg_user_submit(
     }
 
     // now we are sure incoming_msg is not empty we treat it as untrusted input and verify signature
-    if incoming_msg.verify_sig() {
-        debug!("signature verification succeeded");
-    } else {
-        error!("can't verify sig on incoming_msg");
-        return Err(AggregatorError::InvalidParameter);
+    match verify_user_submission_msg(&incoming_msg) {
+        Ok(()) => {
+            debug!("signature verification succeeded");
+        },
+        Err(e) => {
+            error!("can't verify sig on incoming_msg: {:?}", e);
+            return Err(AggregatorError::InvalidParameter);
+        }
     }
 
     // If the set of rate-limit nonces is Some, see if the given nonce appears in it. If so, this
@@ -262,7 +282,10 @@ fn add_to_agg_user_submit(
             return Err(AggregatorError::InvalidParameter);
         }
 
-        if current_aggregation.user_ids.contains(&incoming_msg.user_id) {
+        if current_aggregation
+            .user_ids
+            .contains(&incoming_msg.user_id)
+        {
             error!("current_aggregation.user_ids overlap with incoming_msg.user_id");
             return Err(AggregatorError::InvalidParameter);
         }
@@ -272,12 +295,10 @@ fn add_to_agg_user_submit(
         // debug!("current agg: {:?}", current_aggregation);
 
         // aggregate in the new message
-        current_aggregation
-            .user_ids
-            .insert(incoming_msg.user_id.clone());
+        current_aggregation.user_ids.insert(incoming_msg.user_id.clone());
         current_aggregation
             .aggregated_msg
-            .xor_mut(&incoming_msg.aggregated_msg);
+            .xor_mut_nosgx(&incoming_msg.aggregated_msg);
 
         // sign
         match current_aggregation.sign_mut(&sk) {
@@ -291,5 +312,5 @@ fn add_to_agg_user_submit(
         debug!("✅ new agg with users {:?}", current_aggregation.user_ids);
 
         Ok((current_aggregation, new_observed_nonces))
-    }
+    }   
 }

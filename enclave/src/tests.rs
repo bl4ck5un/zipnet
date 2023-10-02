@@ -2,6 +2,7 @@ use crate::interface::*;
 use crate::sgx_tunittest::*;
 use crate::std::prelude::v1::*;
 use crypto;
+use crypto::{SgxSigningKey, SignMutable, Signable};
 use hkdf::Hkdf;
 use serde_cbor;
 use sgx_rand::Rng;
@@ -36,18 +37,27 @@ fn hkdf() {
     assert_eq!(hex::encode(&okm[..]), expected);
 }
 
+fn test_keypair() -> crypto::CryptoResult<(SgxSigningKey, SgxSigningPubKey)> {
+    let handle = sgx_tcrypto::SgxEccHandle::new();
+    handle.open().unwrap();
+    match handle.create_key_pair() {
+        Ok(pair) => Ok((crypto::KemPrvKey::from(pair.0), KemPubKey::from(pair.1))),
+        Err(e) => Err(CryptoError::SgxCryptoLibError(e)),
+    }
+}
+
 fn sign() -> () {
-    // let (sk, pk) = test_keypair().unwrap();
+    let (sk, pk) = test_keypair().unwrap();
 
-    // let mut mutable = AggregatedMessageObsolete {
-    //     user_ids: BTreeSet::from_iter(vec![EntityId::default()].into_iter()),
-    //     ..Default::default()
-    // };
+    let mut mutable = AggregatedMessageObsolete {
+        user_ids: BTreeSet::from_iter(vec![EntityId::default()].into_iter()),
+        ..Default::default()
+    };
 
-    // mutable.sign_mut(&sk).expect("sign");
+    mutable.sign_mut(&sk).expect("sign");
 
-    // assert_eq!(mutable.tee_pk, pk);
-    // assert!(mutable.verify().expect("verify"));
+    assert_eq!(mutable.tee_pk, pk);
+    assert!(mutable.verify().expect("verify"));
 }
 
 fn aggregate() {

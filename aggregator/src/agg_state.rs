@@ -3,15 +3,24 @@ use crate::util::{AggregatorError, Result};
 use std::collections::BTreeSet;
 
 use interface::{
-    compute_group_id, EntityId, RateLimitNonce, ServerPubKeyPackage, DC_NET_ROUNDS_PER_WINDOW,
+    compute_group_id, EntityId, RateLimitNonce,
+    DC_NET_ROUNDS_PER_WINDOW, ServerPubKeyPackageNoSGX,
 };
 use serde::{Deserialize, Serialize};
 
 extern crate ed25519_dalek;
 use ed25519_dalek::SecretKey;
 
-use crate::agg::{add_to_aggregate, finalize_aggregate, new_aggregator};
-use common::types::{AggRegistrationBlob, AggregatedMessage, SubmissionMessage};
+use common::types_nosgx::{
+    AggRegistrationBlobNoSGX,
+    AggregatedMessage,
+    SubmissionMessage,
+};
+use crate::agg_nosgx::{
+    new_aggregator,
+    finalize_aggregate,
+    add_to_aggregate,
+};
 
 #[derive(Serialize, Deserialize)]
 pub struct AggregatorState {
@@ -34,9 +43,9 @@ impl AggregatorState {
     /// Makes a new aggregate given the pubkeys of the servers. leaf_node = true iff this
     /// aggregator is a leaf-level aggregator
     pub(crate) fn new(
-        pubkeys: Vec<ServerPubKeyPackage>,
+        pubkeys: Vec<ServerPubKeyPackageNoSGX>,
         level: u32,
-    ) -> Result<(AggregatorState, AggRegistrationBlob)> {
+    ) -> Result<(AggregatorState, AggRegistrationBlobNoSGX)> {
         let (sk, agg_id, reg_data) = new_aggregator()?;
 
         let anytrust_ids: BTreeSet<EntityId> =
@@ -78,7 +87,10 @@ impl AggregatorState {
     }
 
     /// Adds the given input to the partial aggregate
-    pub(crate) fn add_to_aggregate(&mut self, input_blob: &SubmissionMessage) -> Result<()> {
+    pub(crate) fn add_to_aggregate(
+        &mut self,
+        input_blob: &SubmissionMessage,
+    ) -> Result<()> {
         let partial_agg = self
             .partial_agg
             .as_mut()

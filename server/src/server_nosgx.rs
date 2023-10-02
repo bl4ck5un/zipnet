@@ -1,35 +1,67 @@
-use crate::util::{Result, ServerError};
 use std::{vec, vec::Vec};
+use crate::util::{Result, ServerError};
 
 use interface::{
-    DcRoundMessage, EntityId, MultiSignable, OutputSignature, RoundOutput, RoundSecret,
-    ServerPubKeyPackage, SgxProtectedKeyPub, UserRegistrationBlob, Xor,
+    EntityId,
+    UserRegistrationBlobNew,
+    ServerPubKeyPackageNoSGX,
+    RoundSecret,
+    RoundOutputUpdated,
+    DcRoundMessage,
+    SignatureNoSGX,
+    MultiSignableUpdated,
+    NoSgxProtectedKeyPub,
 };
 
-use ed25519_dalek::{PublicKey, SecretKey, Signature};
+use ed25519_dalek::{
+    SecretKey,
+    PublicKey,
+    Signature,
+};
 
-use x25519_dalek::{PublicKey as xPublicKey, StaticSecret};
+use x25519_dalek::{
+    PublicKey as xPublicKey,
+    StaticSecret,
+};
 
 use rand::rngs::OsRng;
 
 use std::time::Instant;
 
-use common::types::{
-    AggRegistrationBlob, AggregatedMessage, MarshallAs, RoundSubmissionBlob,
-    ServerRegistrationBlob, SharedSecretsDbServer, SignMutable, SignedPubKeyDb,
-    UnblindedAggregateShare, UnblindedAggregateShareBlob, UnmarshalledAs,
+use common::types_nosgx::{
+    SignMutableNoSGX,
+    XorNoSGX,
+    MarshallAsNoSGX,
+    UnmarshalledAsNoSGX,
+    SharedSecretsDbServer,
+    SignedPubKeyDbNoSGX,
+    AggRegistrationBlobNoSGX,
+    ServerRegistrationBlobNoSGX,
+    AggregatedMessage,
+    UnblindedAggregateShareBlobNoSGX,
+    RoundSubmissionBlobNoSGX,
+    UnblindedAggregateSharedNoSGX,
 };
 
-use log::{debug, error, info};
+use common::funcs_nosgx::{
+    verify_user_attestation,
+    derive_round_secret_server,
+};
 
+use log::{
+    debug,
+    info,
+    error,
+};
+
+use std::collections::{BTreeSet, BTreeMap};
 use itertools::Itertools;
-use std::collections::{BTreeMap, BTreeSet};
 use std::iter::FromIterator;
 use std::sync::mpsc;
 use std::thread;
 
-pub fn new_server() -> Result<(SecretKey, SecretKey, EntityId, ServerPubKeyPackage)> {
-    let mut csprng = OsRng {};
+pub fn new_server() -> Result<(SecretKey, SecretKey, EntityId, ServerPubKeyPackageNoSGX)> {
+    let mut csprng = OsRng{};
     let sig_key = SecretKey::generate(&mut csprng);
     let kem_key = SecretKey::generate(&mut csprng);
 
@@ -40,23 +72,24 @@ pub fn new_server() -> Result<(SecretKey, SecretKey, EntityId, ServerPubKeyPacka
     let kem_key_pk: PublicKey = (&kem_key).into();
     let kem_key_xpk: xPublicKey = xPublicKey::from(&kem_secret);
 
-    let reg = ServerPubKeyPackage {
+    let reg = ServerPubKeyPackageNoSGX {
         sig: sig_key_pk,
         kem: kem_key_pk,
-        xkem: SgxProtectedKeyPub(kem_key_xpk.to_bytes()),
+        xkem: NoSgxProtectedKeyPub(kem_key_xpk.to_bytes()),
     };
 
     Ok((sig_key, kem_key, EntityId::from(&reg), reg))
 }
 
 pub fn recv_user_registration_batch(
-    pubkeys: &mut SignedPubKeyDb,
+    pubkeys: &mut SignedPubKeyDbNoSGX,
     shared_secrets: &mut SharedSecretsDbServer,
     decap_key: &SecretKey,
-    input_blob: &[UserRegistrationBlob],
+    input_blob: &[UserRegistrationBlobNew],
 ) -> Result<()> {
-    let (new_pubkey_db, new_secrets_db) =
-        recv_user_reg_batch((pubkeys, decap_key, &input_blob.to_vec()))?;
+    let (new_pubkey_db, new_secrets_db) = recv_user_reg_batch(
+        (pubkeys, decap_key, &input_blob.to_vec()),
+    )?;
 
     pubkeys.users = new_pubkey_db.users;
     shared_secrets.db = new_secrets_db.db;
@@ -65,9 +98,9 @@ pub fn recv_user_registration_batch(
 }
 
 fn recv_user_reg_batch(
-    input: (&SignedPubKeyDb, &SecretKey, &Vec<UserRegistrationBlob>),
-) -> Result<(SignedPubKeyDb, SharedSecretsDbServer)> {
-    let mut pk_db: SignedPubKeyDb = input.0.clone();
+    input: (&SignedPubKeyDbNoSGX, &SecretKey, &Vec<UserRegistrationBlobNew>),
+) -> Result<(SignedPubKeyDbNoSGX, SharedSecretsDbServer)> {
+    let mut pk_db: SignedPubKeyDbNoSGX = input.0.clone();
     let my_kem_sk = input.1;
 
     for u in input.2.iter() {
@@ -75,7 +108,7 @@ fn recv_user_reg_batch(
         match verify_user_attestation(&u) {
             Ok(()) => {
                 debug!("verify user registration attestation succeeded");
-            }
+            },
             Err(e) => {
                 error!("cannot verify user registration attestation: {:?}", e);
                 return Err(ServerError::UnexpectedError);
@@ -88,7 +121,7 @@ fn recv_user_reg_batch(
 
     // Derive secrets
     // let mut others_kem_pks = vec![];
-    let mut others_kem_db: BTreeMap<SgxProtectedKeyPub, SgxProtectedKeyPub> = BTreeMap::new();
+    let mut others_kem_db: BTreeMap<NoSgxProtectedKeyPub, NoSgxProtectedKeyPub> = BTreeMap::new();
     for (_, k) in pk_db.users.iter() {
         // others_kem_pks.push(k.pk);
         others_kem_db.insert(k.xpk, k.pk);
@@ -101,8 +134,8 @@ fn recv_user_reg_batch(
 }
 
 pub fn recv_aggregator_registration(
-    pubkeys: &mut SignedPubKeyDb,
-    input_blob: &AggRegistrationBlob,
+    pubkeys: &mut SignedPubKeyDbNoSGX,
+    input_blob: &AggRegistrationBlobNoSGX
 ) -> Result<()> {
     let mut new_db = pubkeys.clone();
     let agg_pk = input_blob;
@@ -119,8 +152,8 @@ pub fn recv_aggregator_registration(
 }
 
 pub fn recv_server_registration(
-    pubkeys: &mut SignedPubKeyDb,
-    input_blob: &ServerRegistrationBlob,
+    pubkeys: &mut SignedPubKeyDbNoSGX,
+    input_blob: &ServerRegistrationBlobNoSGX
 ) -> Result<()> {
     let mut new_db = pubkeys.clone();
     let server_pk = input_blob;
@@ -140,7 +173,7 @@ pub fn unblind_aggregate(
     toplevel_agg: &AggregatedMessage,
     signing_key: &SecretKey,
     shared_secrets: &SharedSecretsDbServer,
-) -> Result<(UnblindedAggregateShareBlob, SharedSecretsDbServer)> {
+) -> Result<(UnblindedAggregateShareBlobNoSGX, SharedSecretsDbServer)> {
     unblind_aggregate_mt(
         toplevel_agg,
         signing_key,
@@ -154,7 +187,7 @@ pub fn unblind_aggregate_mt(
     signing_key: &SecretKey,
     shared_secrets: &SharedSecretsDbServer,
     n_threads: usize,
-) -> Result<(UnblindedAggregateShareBlob, SharedSecretsDbServer)> {
+) -> Result<(UnblindedAggregateShareBlobNoSGX, SharedSecretsDbServer)> {
     let start = Instant::now();
     let chunk_size = (toplevel_agg.user_ids.len() + n_threads - 1) / n_threads;
     assert_ne!(chunk_size, 0);
@@ -175,7 +208,9 @@ pub fn unblind_aggregate_mt(
         thread::spawn(move || {
             info!("thread working on {} ids", uks_vec.len());
             let user_ids: BTreeSet<EntityId> = BTreeSet::from_iter(uks_vec.into_iter());
-            let rs = unblind_aggregate_partial(&(round, db_cloned, user_ids)).unwrap();
+            let rs = 
+                unblind_aggregate_partial(&(round, db_cloned, user_ids))
+                .unwrap();
             tx_cloned.send(rs).unwrap();
         });
     }
@@ -187,7 +222,9 @@ pub fn unblind_aggregate_mt(
     let round_secrets: Vec<RoundSecret> = rx.iter().collect();
     info!("========= threads join after {:?}", start.elapsed());
 
-    let result = unblind_aggregate_merge(toplevel_agg, &round_secrets, signing_key, shared_secrets);
+    let result = unblind_aggregate_merge(
+        toplevel_agg, &round_secrets, signing_key, shared_secrets
+    );
 
     info!(
         "========= {} round secrets merged after {:?}.",
@@ -198,51 +235,6 @@ pub fn unblind_aggregate_mt(
     result
 }
 
-use crate::aes_prng::Aes128Rng;
-use byteorder::{ByteOrder, LittleEndian};
-use hkdf::{Hkdf, InvalidLength};
-use rand_core::SeedableRng;
-use sha2::Sha256;
-
-fn verify_user_attestation(_reg_blob: &UserRegistrationBlob) -> std::result::Result<(), ()> {
-    log::warn!("verify_user_attestation is not implemented"); // XXX
-    Ok(())
-}
-
-fn derive_round_secret_server(
-    round: u32,
-    shared_secrets: &SharedSecretsDbServer,
-    entity_ids_to_use: Option<&BTreeSet<EntityId>>,
-) -> std::result::Result<RoundSecret, InvalidLength> {
-    type MyRng = Aes128Rng;
-
-    let mut round_secret = RoundSecret::default();
-
-    for (pk, shared_secret) in shared_secrets.db.iter() {
-        // skip entries not in entity_ids_to_use
-        if let Some(eids) = entity_ids_to_use {
-            if !eids.contains(&EntityId::from(pk)) {
-                log::trace!("entity id of client {} is not in entity_ids_to_use", pk);
-                continue;
-            }
-        }
-
-        let hk = Hkdf::<Sha256>::new(None, &shared_secret.as_ref());
-        // For cryptographic RNG's a seed of 256 bits is recommended, [u8; 32].
-        let mut seed = <MyRng as SeedableRng>::Seed::default();
-
-        // info contains round and window
-        let mut info = [0; 32];
-        let cursor = &mut info;
-        LittleEndian::write_u32(cursor, round);
-        hk.expand(&info, &mut seed)?;
-
-        let mut rng = MyRng::from_seed(seed);
-        round_secret.xor_mut(&DcRoundMessage::rand_from_csprng(&mut rng));
-    }
-
-    Ok(round_secret)
-}
 
 pub fn unblind_aggregate_partial(
     input: &(u32, SharedSecretsDbServer, BTreeSet<EntityId>),
@@ -276,17 +268,17 @@ pub fn unblind_aggregate_partial(
 }
 
 pub fn unblind_aggregate_merge(
-    toplevel_agg: &RoundSubmissionBlob,
-    round_secrets: &Vec<RoundSecret>,
+    toplevel_agg: &RoundSubmissionBlobNoSGX,
+    round_secrets : &Vec<RoundSecret>,
     sig_key: &SecretKey,
     shared_secrets: &SharedSecretsDbServer,
-) -> Result<(UnblindedAggregateShareBlob, SharedSecretsDbServer)> {
+) -> Result<(UnblindedAggregateShareBlobNoSGX, SharedSecretsDbServer)> {
     let mut round_secret = RoundSecret::default();
     for rs in round_secrets.iter() {
-        round_secret.xor_mut(rs);
+        round_secret.xor_mut_nosgx(rs);
     }
 
-    let mut unblind_agg = UnblindedAggregateShare {
+    let mut unblind_agg = UnblindedAggregateSharedNoSGX {
         encrypted_msg: toplevel_agg.clone(),
         key_share: round_secret,
         sig: Signature::from_bytes(&[0u8; 64]).expect("failed to generate Signature from bytes"),
@@ -303,15 +295,15 @@ pub fn unblind_aggregate_merge(
     });
 
     Ok((
-        unblind_agg.marshal().expect("marshal unblind agg failed"),
-        shared_secrets.ratchet(),
+        unblind_agg.marshal_nosgx().expect("marshal unblind agg failed"),
+        shared_secrets.ratchet()
     ))
 }
 
 pub fn derive_round_output(
     sig_sk: &SecretKey,
-    server_aggs: &[UnblindedAggregateShareBlob],
-) -> Result<RoundOutput> {
+    server_aggs: &[UnblindedAggregateShareBlobNoSGX],
+) -> Result<RoundOutputUpdated> {
     if server_aggs.is_empty() {
         error!("empty shares array");
         return Err(ServerError::UnexpectedError);
@@ -321,37 +313,31 @@ pub fn derive_round_output(
     let mut final_msg = DcRoundMessage::default();
 
     // We require all s in shares should have the same aggregated_msg
-    let first_msg = server_aggs[0]
-        .unmarshal()
-        .expect("failed to unmarshal the unblinded aggregated share");
+    let first_msg = server_aggs[0].unmarshal_nosgx().expect("failed to unmarshal the unblinded aggregated share");
     let final_aggregation = first_msg.encrypted_msg.aggregated_msg;
     let round = first_msg.encrypted_msg.round;
 
     for s in server_aggs.iter() {
-        let share = s
-            .unmarshal()
-            .expect("failed to unmarshal the unblinded aggregated share");
+        let share = s.unmarshal_nosgx().expect("failed to unmarshal the unblinded aggregated share");
         if share.encrypted_msg.aggregated_msg != final_aggregation {
             error!("share {:?} has a different final agg", share);
             return Err(ServerError::UnexpectedError);
         }
-        final_msg.xor_mut(&share.key_share);
+        final_msg.xor_mut_nosgx(&share.key_share);
     }
 
     // Finally xor secrets with the message
-    final_msg.xor_mut(&final_aggregation);
+    final_msg.xor_mut_nosgx(&final_aggregation);
 
-    let mut round_output = RoundOutput {
+    let mut round_output = RoundOutputUpdated {
         round,
         dc_msg: final_msg,
         server_sigs: vec![],
     };
 
-    let (sig, pk) = round_output
-        .sign(sig_sk)
-        .expect("failed to sign the round output");
-
-    round_output.server_sigs.push(OutputSignature { pk, sig });
+    let (sig, pk) = round_output.sign(sig_sk).expect("failed to sign the round output");
+    
+    round_output.server_sigs.push(SignatureNoSGX {pk, sig});
 
     debug!(
         "⏰ round {} concluded with output {:?}",
