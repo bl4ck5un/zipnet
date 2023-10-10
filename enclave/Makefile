@@ -128,7 +128,7 @@ $(TARGET_DIR)/Enclave_t.o: $(Enclave_EDL_Files)
 	@echo "CC   <=  $<"
 
 $(TARGET_DIR)/enclave.so: $(TARGET_DIR)/Enclave_t.o
-#	@cargo build --release
+#	RUSTFLAGS='-C target-feature=+avx2' cargo build --release
 	RUSTFLAGS='-C target-feature=+avx2' cargo build
 	@$(CXX) $(TARGET_DIR)/Enclave_t.o -o $@ $(RustEnclave_Link_Flags)
 	@echo "LINK =>  $@"
