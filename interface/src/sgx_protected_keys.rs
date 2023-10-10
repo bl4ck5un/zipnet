@@ -5,14 +5,12 @@ use ed25519_dalek::{
 
 use core::fmt;
 use core::fmt::{Debug, Display, Formatter};
-use log;
 use sha2::{Digest, Sha256};
-use std::convert::TryFrom;
+use std::vec;
 use std::vec::Vec;
-use std::{println, vec};
 
 use crate::ecall_interface_types::RoundOutput;
-use crate::user_request::{DcMessage, DcRoundMessage, EntityId, UserSubmissionMessage};
+use crate::user_request::{DcMessage, DcRoundMessage, EntityId};
 
 #[cfg_attr(feature = "trusted", serde(crate = "serde_sgx"))]
 #[derive(Copy, Clone, Default, Serialize, Deserialize, Eq, PartialEq, PartialOrd, Ord)]
