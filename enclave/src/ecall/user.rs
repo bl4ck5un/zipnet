@@ -3,7 +3,6 @@ use crate::crypto::SharedSecretsDbClient;
 use ecall::keygen::new_keypair_ext_internal;
 
 use interface::*;
-use sgx_status_t::SGX_ERROR_INVALID_PARAMETER;
 use sgx_types::SgxResult;
 use std::collections::BTreeMap;
 use std::string::ToString;
@@ -12,7 +11,7 @@ use unseal::SealInto;
 
 use ed25519_dalek::PublicKey;
 
-/// Derives shared secrets with all the given KEM pubkeys, and derives a new signing pubkey.
+/// Derives shared secrets with all the given KEM pubkeys, and derived a new signing pubkey.
 /// Returns sealed secrets, a sealed private key, and a registration message to send to an
 /// anytrust node
 pub fn new_user(
@@ -37,8 +36,6 @@ pub fn new_user(
 
     // 3. derive server secrets
     let server_secrets = SharedSecretsDbClient::derive_shared_secrets(&sk, &kem_db)?;
-
-    let (key, value) = server_secrets.db.first_key_value().unwrap();
 
     Ok((server_secrets.seal_into()?, sk.seal_into()?, pk))
 }

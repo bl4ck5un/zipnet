@@ -1,7 +1,7 @@
 use crate::server_state::ServerState;
 use interface::RoundOutput;
 
-use common::{cli_util, enclave::EnclaveError};
+use common::cli_util;
 
 use std::fs::File;
 
@@ -15,8 +15,6 @@ pub(crate) type Result<T> = core::result::Result<T, ServerError>;
 
 #[derive(Debug, Error)]
 pub enum ServerError {
-    #[error("error from enclave")]
-    Enclave(#[from] EnclaveError),
     #[error("error from IO")]
     Io(#[from] std::io::Error),
     #[error("error in serialization/deserialization")]
@@ -26,13 +24,13 @@ pub enum ServerError {
 }
 
 impl From<SignatureError> for ServerError {
-    fn from(error: SignatureError) -> Self {
+    fn from(_error: SignatureError) -> Self {
         ServerError::UnexpectedError
     }
 }
 
 impl From<rand::Error> for ServerError {
-    fn from(error: rand::Error) -> Self {
+    fn from(_error: rand::Error) -> Self {
         ServerError::UnexpectedError
     }
 }

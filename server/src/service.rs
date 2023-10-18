@@ -2,8 +2,8 @@ use crate::{
     util::{save_output, save_state, ServerError},
     ServerState,
 };
-use common::cli_util;
-use interface::RoundOutput;
+use common::{cli_util, log_time::log_time};
+use interface::{RoundOutput, RETRIES, TIMEOUT_SEC};
 
 use common::types::{RoundSubmissionBlob, UnblindedAggregateShareBlob};
 
@@ -14,13 +14,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-use actix_rt::Arbiter;
 use actix_web::{
     client::Client,
     get,
     http::{StatusCode, Uri},
-    post, rt as actix_rt, web, App, HttpResponse, HttpServer, ResponseError,
+    post, rt as actix_rt, web, App, HttpResponse, HttpServer, ResponseError, Result,
 };
+// use futures_util::future::ok;
 use log::{debug, error, info};
 use thiserror::Error;
 
@@ -81,7 +81,7 @@ fn leader_finish_round(state: &mut ServiceState) {
     let output = server_state.derive_round_output(&round_shares).unwrap();
     let round = output.round;
 
-    // debug!("output: {:?}", output);
+    debug!("output: {:?}", output);
 
     let mut output_path = "../server/round_output.txt".to_owned();
     output_path.insert(22, std::char::from_digit(round, 10).unwrap());
@@ -108,27 +108,41 @@ async fn send_share_to_leader(base_url: String, share: UnblindedAggregateShareBl
     cli_util::save(&mut body, &share).expect("could not serialize share");
 
     // Send the serialized contents as an HTTP POST to leader/submit-share
-    let timeout_sec = 20;
     debug!(
         "Sending share to {} with timeout {}s",
-        base_url, timeout_sec
+        base_url, TIMEOUT_SEC
     );
     let client = Client::builder()
-        .timeout(Duration::from_secs(timeout_sec))
+        .timeout(Duration::from_secs(TIMEOUT_SEC))
         .finish();
     let post_path: Uri = [&base_url, "/submit-share"]
         .concat()
         .parse()
         .expect("Couldn't not append '/submit-share' to forward URL");
-    match client.post(post_path).send_body(body).await {
-        Ok(res) => {
-            if res.status() == StatusCode::OK {
-                debug!("Share sent successfully");
-            } else {
-                error!("Could not send share: {:?}", res);
+
+    let mut retries = RETRIES;
+    loop {
+        match client.post(post_path.clone()).send_body(body.clone()).await {
+            Ok(res) => {
+                if res.status() == StatusCode::OK {
+                    debug!("Share sent successfully");
+                    break;
+                } else {
+                    error!("Could not send share No.1: {:?}", res);
+                }
+            }
+            Err(e) => {
+                error!("Could not send share No.2: {:?}", e);
             }
         }
-        Err(e) => error!("Could not send share: {:?}", e),
+
+        retries -= 1;
+        if retries == 0 {
+            error!("Failed to send share after multiple attempts");
+            break;
+        }
+        // Wait for 50ms before retrying
+        // actix::clock::sleep(Duration::from_millis(50)).await;
     }
 }
 
@@ -138,7 +152,8 @@ async fn submit_agg(
     (payload, state): (String, web::Data<Arc<Mutex<ServiceState>>>),
 ) -> Result<HttpResponse, ApiError> {
     let start = Instant::now();
-
+    let input_start = Instant::now();
+    log_time();
     // Strip whitespace from the payload
     let payload = payload.split_whitespace().next().unwrap_or("");
     // Parse aggregation
@@ -156,13 +171,16 @@ async fn submit_agg(
         } = state_handle.deref_mut();
         let group_size = server_state.anytrust_group_size;
 
+        // log input time
+        let input_duration = input_start.elapsed();
+        debug!("[server] uinput: {:?}", input_duration);
+
         let unblind_start = Instant::now();
         // Unblind the input
         let share = server_state.unblind_aggregate(&agg_data)?;
         let unblind_duration = unblind_start.elapsed();
         debug!("[server] unblind_aggregate: {:?}", unblind_duration);
-
-        // debug!("unblinded share: {:?}", share);
+        debug!("unblinded share: {:?}", share);
 
         match leader_url {
             // We're the leader
@@ -179,12 +197,14 @@ async fn submit_agg(
                 if round_shares.len() == group_size {
                     info!("Finishing round");
                     leader_finish_round(state_handle.deref_mut());
+                    log_time();
                 }
             }
             // We're a follower. Send the unblinded aggregate to the leader
             Some(url) => {
                 // This might take a while so do it in a separate thread
-                Arbiter::spawn(send_share_to_leader(url.clone(), share));
+                // let state_for_spawn = state.clone();
+                actix_rt::spawn(send_share_to_leader(url.clone(), share));
             }
         }
     }
@@ -192,6 +212,7 @@ async fn submit_agg(
     // Save the state if a path is specified
     let server_state = &state_handle.server_state;
     let server_state_path = &state_handle.server_state_path;
+
     server_state_path.as_ref().map(|path| {
         info!("Saving state");
         match save_state(path, server_state) {
@@ -202,7 +223,6 @@ async fn submit_agg(
 
     let duration = start.elapsed();
     debug!("[server] submit_agg: {:?}", duration);
-
     Ok(HttpResponse::Ok().body("OK\n"))
 }
 
@@ -212,6 +232,7 @@ async fn submit_share(
     (payload, state): (String, web::Data<Arc<Mutex<ServiceState>>>),
 ) -> Result<HttpResponse, ApiError> {
     // Unpack state
+    let start = Instant::now();
     let mut handle = state.get_ref().lock().unwrap();
     let group_size = handle.server_state.anytrust_group_size;
     let ServiceState {
@@ -228,14 +249,19 @@ async fn submit_share(
     }
 
     // Parse the share and add it to our shares
+    debug!("payload len:{}", payload.len());
     let share: UnblindedAggregateShareBlob = cli_util::load(&mut payload.as_bytes())?;
     round_shares.push(share);
     info!("Got share. Number of shares is now {}", round_shares.len());
+
+    let duration = start.elapsed();
+    debug!("[server] aggregate_share: {:?}", duration);
 
     // If all the shares are in, that's the end of the round
     if round_shares.len() == group_size {
         info!("Finishing round");
         leader_finish_round(handle.deref_mut());
+        log_time();
     }
 
     Ok(HttpResponse::Ok().body("OK\n"))
@@ -348,12 +374,15 @@ pub(crate) async fn start_service(bind_addr: String, state: ServiceState) -> std
 
     // Start the web server
     HttpServer::new(move || {
-        App::new().data(state.clone()).configure(|cfg| {
-            cfg.service(submit_agg)
-                .service(submit_share)
-                .service(round_result)
-                .service(round_msg);
-        })
+        App::new()
+            .data(state.clone())
+            .data(web::PayloadConfig::new(10 << 21))
+            .configure(|cfg| {
+                cfg.service(submit_agg)
+                    .service(submit_share)
+                    .service(round_result)
+                    .service(round_msg);
+            })
     })
     .workers(1)
     .bind(bind_addr)
