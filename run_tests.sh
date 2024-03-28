@@ -23,7 +23,7 @@ NUM_USERS=5
 NUM_AGGREGATORS=1
 NUM_USERS_PER_AGGREGATOR=5
 
-NUM_TEST_ROUNDS=2
+NUM_TEST_ROUNDS=10
 
 # We define four messages, separated by semicolons. The leading ; is because we index by 1
 # MSGS_STR=";testing;hello;world;yo"

@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # SSH Info
-SERVER_IPS=("3.140.248.195" "13.38.37.45" "54.176.5.119" "43.207.114.246" "34.221.6.203")
-SERVER_AWS_COMMANDS=("ec2-3-140-248-195.us-east-2.compute.amazonaws.com" "ec2-13-38-37-45.eu-west-3.compute.amazonaws.com" "ec2-54-176-5-119.us-west-1.compute.amazonaws.com" "ec2-43-207-114-246.ap-northeast-1.compute.amazonaws.com" "ec2-34-221-6-203.us-west-2.compute.amazonaws.com")
-AGG_AWS_COMMAND="ec2-18-218-37-219.us-east-2.compute.amazonaws.com"
+SERVER_IPS=("18.117.225.192" "3.143.212.0" "3.17.167.35" "3.139.55.116" "18.190.26.178")
+SERVER_AWS_COMMANDS=("ec2-18-117-225-192.us-east-2.compute.amazonaws.com" "ec2-3-143-212-0.us-east-2.compute.amazonaws.com" "ec2-3-17-167-35.us-east-2.compute.amazonaws.com" "ec2-3-139-55-116.us-east-2.compute.amazonaws.com" "ec2-18-190-26-178.us-east-2.compute.amazonaws.com")
+AGG_AWS_COMMAND="ec2-18-118-119-247.us-east-2.compute.amazonaws.com"
 SSH_PREFIX="ssh -t -i"
-KEY_ADDRESS="./pem_key/dc-net-test.pem"
+KEY_ADDRESS="./pem_key/organ.pem"
 REMOTE_SERVER_KEY_PREFIX="./pem_key/ss"
 REMOTE_SERVER_KEY_POSTFIX=".pem"
 
@@ -22,15 +22,15 @@ CLINET_TIME_LOG="../client/time_recorder.txt"
 
 # Settings
 THREAD_NUM=16
-is_WAN=1
+is_WAN=0
 is_EVALUATION=1
 num_leader=1
 num_follower=4
 num_server=$((num_leader + num_follower))
 num_leaf_aggregator=16
-dc_net_message_length=160
-dc_net_n_slot=16
-num_user=16
+dc_net_message_length=128
+dc_net_n_slot=8
+num_user=100
 
 footprint_n_slots=$(expr 4 \* $dc_net_n_slot)
 export DC_NUM_USER=$num_user
@@ -38,6 +38,16 @@ export DC_NET_MESSAGE_LENGTH=$dc_net_message_length
 export DC_NET_N_SLOTS=$dc_net_n_slot
 export FOOTPRINT_N_SLOTS=$footprint_n_slots
 export RUSTFLAGS="-Ctarget-feature=+aes,+ssse3"
+
+
+# first setup
+first_setup(){
+    script="cd testnet; ./start-docker.sh; exit"
+    for ((i = 0; i <= $(expr ${#SERVER_AWS_COMMANDS[@]} - 1); i++)); do
+        echo $i
+        $SSH_PREFIX $KEY_ADDRESS ${SERVER_AWS_COMMANDS[$i]} $script
+    done
+}
 
 # locally setup
 # including:
@@ -181,8 +191,8 @@ start_leader(){
     $SSH_PREFIX $KEY_ADDRESS $SERVER_AWS_COMMAND "
         source ~/.bashrc
         cd $WORKING_ADDR
-        docker start dcnet-5
-        docker exec -di dcnet-5 /bin/bash -c \"export PATH=/root/.cargo/bin:$PATH; cd sgx; \
+        docker start dcnet-8
+        docker exec -di dcnet-8 /bin/bash -c \"export PATH=/root/.cargo/bin:$PATH; cd sgx; \
         ./script/server_ctrl_multithread.sh stop-all;\
         nohup ./script/server_ctrl_multithread.sh start-leader $dc_net_message_length $dc_net_n_slot $num_users > /dev/null 2>&1 &\"
         cd
@@ -204,8 +214,8 @@ start_follower(){
         $SSH_PREFIX $KEY_ADDRESS $SERVER_AWS_COMMAND "
             source ~/.bashrc
             cd $WORKING_ADDR
-            docker start dcnet-5
-            docker exec -di dcnet-5 /bin/bash -c \"export PATH=/root/.cargo/bin:$PATH; cd sgx; \
+            docker start dcnet-8
+            docker exec -di dcnet-8 /bin/bash -c \"export PATH=/root/.cargo/bin:$PATH; cd sgx; \
             ./script/server_ctrl_multithread.sh stop-all;\
             nohup ./script/server_ctrl_multithread.sh start-follower $((i+1)) $dc_net_message_length $dc_net_n_slot $num_users > /dev/null 2>&1 &\"
             cd
@@ -326,8 +336,8 @@ eval_all(){
         source ~/.bashrc
         cd testnet1
         git pull
-        docker start dcnet-5
-        docker exec -di dcnet-5 /bin/bash -c \"export PATH=/root/.cargo/bin:$PATH; cd sgx;\
+        docker start dcnet-8
+        docker exec -di dcnet-8 /bin/bash -c \"export PATH=/root/.cargo/bin:$PATH; cd sgx;\
         echo haha;\
         nohub su ubuntu ./dc-net-control.sh set-rem $num_follower $dc_net_message_length $dc_net_n_slot $num_users;\
         nohub for i in {1..5}
@@ -350,6 +360,8 @@ eval_all(){
 
 if [[ $1 == "setup" ]]; then
     setup
+elif [[ $1 == "first-setup" ]]; then
+    first_setup
 elif [[ $1 == "eval-all" ]]; then
     # follower slot_length slot_num user_num
     eval_all $2 $3 $4 $5
