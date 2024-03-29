@@ -26,11 +26,11 @@ RESULT_TIME="../server/result_time.txt"
 CLIENT_SERVICE_PORT="9330"
 AGGREGATOR_PORT="18300"
 SERVER_PORT="28942"
-SERVER_IP=("18.117.225.192" "3.143.212.0" "3.17.167.35" "3.139.55.116" "18.190.26.178")
+SERVER_IP=("3.129.90.254" "18.219.84.70" "13.58.20.225" "18.223.102.178" "13.58.166.253")
 
-# CMD_PREFIX="cargo run --release -- "
+CMD_PREFIX="cargo run --release -- "
 # [onlytest]
-CMD_PREFIX="cargo run -- "
+# CMD_PREFIX="cargo run -- "
 
 SERVER_CMD_PREFIX="/home/ubuntu/.cargo/bin/cargo cargo run -- "
 # Assume wlog that the leading anytrust node is the first one
@@ -298,10 +298,13 @@ test_multi_clients() {
     NUM_SLOT=$3
     NUM_GROUP=2
     python -c "from generate_message import generate_round_multiple_message; generate_round_multiple_message($NUM_SLOT,$MESSAGE_LENGTH)"
+    # send msg
     for i in $(seq 1 $NUM_GROUP); do
         test_multi_client $(( NUM_SLOT/NUM_GROUP )) $i &
     done
     wait
+
+    # send cover
     COVER_NUM=$NUM_USERS-$NUM_SLOT
     COVER_NUM_GROUP=2
     for i in $(seq 1 $NUM_GROUP); do

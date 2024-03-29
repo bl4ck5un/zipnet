@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # SSH Info
-SERVER_IPS=("18.117.225.192" "3.143.212.0" "3.17.167.35" "3.139.55.116" "18.190.26.178")
-SERVER_AWS_COMMANDS=("ec2-18-117-225-192.us-east-2.compute.amazonaws.com" "ec2-3-143-212-0.us-east-2.compute.amazonaws.com" "ec2-3-17-167-35.us-east-2.compute.amazonaws.com" "ec2-3-139-55-116.us-east-2.compute.amazonaws.com" "ec2-18-190-26-178.us-east-2.compute.amazonaws.com")
-AGG_AWS_COMMAND="ec2-18-118-119-247.us-east-2.compute.amazonaws.com"
+SERVER_IPS=("3.129.90.254" "18.219.84.70" "13.58.20.225" "18.223.102.178" "13.58.166.253")
+SERVER_AWS_COMMANDS=("ec2-3-129-90-254.us-east-2.compute.amazonaws.com" "ec2-18-219-84-70.us-east-2.compute.amazonaws.com" "ec2-13-58-20-225.us-east-2.compute.amazonaws.com" "ec2-18-223-102-178.us-east-2.compute.amazonaws.com" "ec2-13-58-166-253.us-east-2.compute.amazonaws.com")
+AGG_AWS_COMMAND="ec2-18-116-63-154.us-east-2.compute.amazonaws.com"
 SSH_PREFIX="ssh -t -i"
 KEY_ADDRESS="./pem_key/organ.pem"
 REMOTE_SERVER_KEY_PREFIX="./pem_key/ss"
@@ -30,7 +30,7 @@ num_server=$((num_leader + num_follower))
 num_leaf_aggregator=16
 dc_net_message_length=128
 dc_net_n_slot=8
-num_user=100
+num_user=50
 
 footprint_n_slots=$(expr 4 \* $dc_net_n_slot)
 export DC_NUM_USER=$num_user
@@ -47,6 +47,7 @@ first_setup(){
         echo $i
         $SSH_PREFIX $KEY_ADDRESS ${SERVER_AWS_COMMANDS[$i]} $script
     done
+    $SSH_PREFIX $KEY_ADDRESS $AGG_AWS_COMMAND $script
 }
 
 # locally setup

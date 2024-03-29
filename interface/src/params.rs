@@ -5,7 +5,7 @@ pub const PARAMETER_FLAG: bool = true;
 /// When turning to evaluation mode, aggregator will first save all msg from client to file,
 /// and the the state of Aggregator and Server will not be renewed,
 /// this is for the convenience of repeated experiment.
-pub const EVALUATION_FLAG: bool = false;
+pub const EVALUATION_FLAG: bool = true;
 
 /// User id is sha-256 hash of some public key
 pub const USER_ID_LENGTH: usize = 32;
