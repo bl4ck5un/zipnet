@@ -299,14 +299,14 @@ test_multi_clients() {
     NUM_GROUP=2
     python -c "from generate_message import generate_round_multiple_message; generate_round_multiple_message($NUM_SLOT,$MESSAGE_LENGTH)"
     # send msg
-    # for i in $(seq 1 $NUM_GROUP); do
-    #     test_multi_client $(( NUM_SLOT/NUM_GROUP )) $i &
-    # done
-    # wait
-
-    for i in $(seq 1 $NUM_SLOT); do
-        single_client_send $i
+    for i in $(seq 1 $NUM_GROUP); do
+        test_multi_client $(( NUM_SLOT/NUM_GROUP )) $i &
     done
+    wait
+
+    if [ $((NUM_SLOT % 2)) -eq 1 ]; then
+        single_client_send $NUM_SLOT
+    fi
 
     # send cover
     COVER_NUM=$NUM_USERS-$NUM_SLOT
