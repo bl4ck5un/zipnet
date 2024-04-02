@@ -26,7 +26,7 @@ RESULT_TIME="../server/result_time.txt"
 CLIENT_SERVICE_PORT="9330"
 AGGREGATOR_PORT="18300"
 SERVER_PORT="28942"
-SERVER_IP=("3.129.90.254" "18.219.84.70" "13.58.20.225" "18.223.102.178" "13.58.166.253")
+SERVER_IP=("18.116.59.7" "18.117.163.191" "18.222.209.116" "3.138.103.202" "3.129.88.46")
 
 CMD_PREFIX="cargo run --release -- "
 # [onlytest]
@@ -35,9 +35,9 @@ CMD_PREFIX="cargo run --release -- "
 SERVER_CMD_PREFIX="/home/ubuntu/.cargo/bin/cargo cargo run -- "
 # Assume wlog that the leading anytrust node is the first one
 ROUND=0
-ROUND_DURATION=100000
+ROUND_DURATION=10000
 THREAD_NUM=16
-LOG_TYPE=debug
+LOG_TYPE=info
 
 log_time() {
     timestamp=$(date +%s%N)

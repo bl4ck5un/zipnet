@@ -1,9 +1,10 @@
 #!/bin/bash
 
 # SSH Info
-SERVER_IPS=("3.129.90.254" "18.219.84.70" "13.58.20.225" "18.223.102.178" "13.58.166.253")
-SERVER_AWS_COMMANDS=("ec2-3-129-90-254.us-east-2.compute.amazonaws.com" "ec2-18-219-84-70.us-east-2.compute.amazonaws.com" "ec2-13-58-20-225.us-east-2.compute.amazonaws.com" "ec2-18-223-102-178.us-east-2.compute.amazonaws.com" "ec2-13-58-166-253.us-east-2.compute.amazonaws.com")
-AGG_AWS_COMMAND="ec2-18-116-63-154.us-east-2.compute.amazonaws.com"
+SERVER_IPS=("18.116.59.7" "18.117.163.191" "18.222.209.116" "3.138.103.202" "3.129.88.46")
+SERVER_AWS_COMMANDS=("ec2-18-116-59-7.us-east-2.compute.amazonaws.com" "ec2-18-117-163-191.us-east-2.compute.amazonaws.com" "ec2-18-222-209-116.us-east-2.compute.amazonaws.com" "ec2-3-138-103-202.us-east-2.compute.amazonaws.com" "ec2-3-129-88-46.us-east-2.compute.amazonaws.com")
+AGG_AWS_COMMAND="ec2-18-216-210-181.us-east-2.compute.amazonaws.com"
+AGG_IP="18.216.210.181"
 SSH_PREFIX="ssh -t -i"
 KEY_ADDRESS="./pem_key/organ.pem"
 REMOTE_SERVER_KEY_PREFIX="./pem_key/ss"
@@ -28,9 +29,9 @@ num_leader=1
 num_follower=4
 num_server=$((num_leader + num_follower))
 num_leaf_aggregator=16
-dc_net_message_length=128
-dc_net_n_slot=8
-num_user=50
+dc_net_message_length=160
+dc_net_n_slot=7
+num_user=32
 
 footprint_n_slots=$(expr 4 \* $dc_net_n_slot)
 export DC_NUM_USER=$num_user
@@ -153,14 +154,16 @@ update_code(){
         if [ $is_WAN -eq 1 ]; then 
             KEY_ADDRESS="./pem_key/ss$i.pem"
         fi
-        $SSH_PREFIX $KEY_ADDRESS $SERVER_AWS_COMMAND "
-            cd $WORKING_ADDR
-            git pull origin master
-            # git fetch origin master
-            # git reset --hard origin/master
-            cd
-            exit
-        "
+        # $SSH_PREFIX $KEY_ADDRESS $SERVER_AWS_COMMAND "
+        #     cd $WORKING_ADDR
+        #     git pull origin master
+        #     # git fetch origin master
+        #     # git reset --hard origin/master
+        #     cd
+        #     exit
+        # "
+        scp -i $KEY_ADDRESS ./dc-net-control.sh ubuntu@${SERVER_IPS[$((i-1))]}:~/testnet/script
+        scp -i $KEY_ADDRESS ./server_ctrl_multithread.sh ubuntu@${SERVER_IPS[$((i-1))]}:~/testnet/script
     done
 }
 
@@ -300,7 +303,7 @@ stop_remote(){
             KEY_ADDRESS="./pem_key/ss$i.pem"
         fi
         $SSH_PREFIX $KEY_ADDRESS $SERVER_AWS_COMMAND "
-            cd $WORKING_ADDR
+            cd $WORKING_ADDR/script
             ./server_ctrl_multithread.sh stop-all
             cd
             exit

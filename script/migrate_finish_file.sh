@@ -1,6 +1,6 @@
-FOLDER_PREFIX="../data_saving"
-WORKING_ADDR="./testnet1"
-KEY_ADDRESS="../.ssh/dc-net-test.pem"
+FOLDER_PREFIX="~/Zhenyu/dataset/data_saving"
+WORKING_ADDR="./testnet"
+KEY_ADDRESS="./pem_key/organ.pem"
 
 
 migrate_to_database(){
