@@ -304,7 +304,7 @@ test_multi_clients() {
     # done
     # wait
 
-    for i in $(seq 1 $NUM_GROUP); do
+    for i in $(seq 1 $NUM_SLOT); do
         single_client_send $i
     done
 
