@@ -314,6 +314,9 @@ test_multi_clients() {
     for i in $(seq 1 $NUM_GROUP); do
         multi_client_send_cover $(( COVER_NUM/COVER_NUM_GROUP )) $i $NUM_SLOT &
     done
+    if [ $((COVER_NUM % 2)) -eq 1 ]; then
+        single_client_send_cover $NUM_USERS
+    fi
     wait
     echo "start sending error msg"
     sleep 10

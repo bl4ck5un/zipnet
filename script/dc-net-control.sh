@@ -31,7 +31,7 @@ num_server=$((num_leader + num_follower))
 num_leaf_aggregator=16
 dc_net_message_length=160
 dc_net_n_slot=7
-num_user=32
+num_user=16
 
 footprint_n_slots=$(expr 4 \* $dc_net_n_slot)
 export DC_NUM_USER=$num_user
