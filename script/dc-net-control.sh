@@ -245,7 +245,7 @@ agg_eval_several(){
     num_user="${5:-$num_user}"
     for i in $(seq 1 $iter); do
         agg_eval
-        sleep 40
+        sleep 12
         su ubuntu ./dc-net-control.sh start_leader $dc_net_message_length $dc_net_n_slot $num_user
         su ubuntu ./dc-net-control.sh start_follower $num_follower $dc_net_message_length $dc_net_n_slot $num_user
     done
